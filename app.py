@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from flask import Flask, jsonify, request, redirect, url_for, session, flash, get_flashed_messages # pyright: ignore[reportMissingImports]
 from flask_sqlalchemy import SQLAlchemy # pyright: ignore[reportMissingImports] # pyright: ignore[reportMissingImports]
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user # pyright: ignore[reportMissingImports] # pyright: ignore[reportMissingImports]
@@ -16,19 +17,29 @@ from dotenv import load_dotenv # pyright: ignore[reportMissingImports]
 from werkzeug.utils import secure_filename # pyright: ignore[reportMissingImports]
 import time
 from supabase import create_client, Client # pyright: ignore[reportMissingImports]
-
+from flask import Flask, render_template
+app = Flask(__name__)
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 
+base_dir = Path(__file__).parent
+db_path = base_dir / "kangmas_shop.db"
+
 # Supabase Configuration
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Database Configuration untuk Supabase PostgreSQL
+# ==== PERBAIKAN DATABASE - TAMBAHKAN INI ====
+# Jika DATABASE_URI tidak ada, gunakan SQLite
+if not os.getenv('DATABASE_URI'):
+    os.environ['DATABASE_URI'] = f'sqlite:///{db_path}'
+    print(f"✅ Database SQLite: {db_path}")
+
+# Database Configuration
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'kang-mas-secret-2025')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URI')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -465,8 +476,13 @@ Product.to_dict = product_to_dict
 def reset_database_safe():
     """Safely reset database by creating new one"""
     try:
-        # Drop all tables and create new ones
-        db.drop_all()
+        # Cek dulu apakah database sudah ada
+        db_path = Path("kangmas_shop.db")
+        if db_path.exists():
+            print("Database sudah ada, menggunakan yang existing...")
+            return True
+            
+        # Jika tidak ada, buat baru
         db.create_all()
         print("New database created successfully!")
         return True
@@ -485,7 +501,6 @@ TRANSACTION_TEMPLATES = {
             {'account_type': 'modal', 'side': 'credit', 'description': 'Modal pemilik'}
         ]
     },
-    
         # 🎯 PEMBELIAN UTAMA - GUNAKAN INI
     'pembelian_sederhana': {
         'name': 'Pembelian Sederhana',
@@ -496,32 +511,6 @@ TRANSACTION_TEMPLATES = {
             {'account_type': 'hutang', 'side': 'credit', 'description': 'Utang dagang'}
         ],
         'inventory_effect': {'type': 'auto', 'action': 'in'}
-    },
-        'kerugian_ikan': {
-        'name': 'Kerugian Ikan (Mati/Hibah/Lainnya)',
-        'description': 'Pencatatan kerugian ikan karena mati, hibah, atau sebab lainnya',
-        'entries': [
-            {'account_type': 'beban_kerugian', 'side': 'debit', 'description': 'Beban kerugian ikan'},
-            {'account_type': 'persediaan', 'side': 'credit', 'description': 'Pengurangan persediaan ikan'}
-        ],
-        'inventory_effect': {'type': 'auto', 'action': 'out'},
-        'inputs': [
-            {'name': 'jenis_kerugian', 'label': 'Jenis Kerugian', 'type': 'select', 'required': True, 
-             'options': {
-                 'mati_di_jalan': 'Mati dalam Perjalanan',
-                 'mati_di_kolam': 'Mati di Kolam', 
-                 'hibah_keluarga': 'Hibah ke Keluarga',
-                 'rusak': 'Ikan Rusak/Cacat',
-                 'lainnya': 'Lainnya'
-             }},
-            {'name': 'jenis_ikan', 'label': 'Jenis Ikan', 'type': 'select', 'required': True,
-             'options': {
-                 'bibit': 'Bibit Ikan Mas',
-                 'konsumsi': 'Ikan Mas Konsumsi'
-             }},
-            {'name': 'quantity', 'label': 'Quantity (ekor)', 'type': 'number', 'required': True},
-            {'name': 'keterangan', 'label': 'Keterangan Detail', 'type': 'text', 'required': True}
-        ]
     },
     'pembelian_peralatan_kredit': {
         'name': 'Pembelian Peralatan Kredit',
@@ -1280,107 +1269,6 @@ def create_journal_from_template(template_key, date, amounts):
         import traceback
         traceback.print_exc()
         return None
-
-def create_loss_journal(template_key, date, inputs):
-    """Membuat jurnal kerugian dengan perhitungan otomatis"""
-    try:
-        template = TRANSACTION_TEMPLATES[template_key]
-        
-        # Ambil data dari input
-        jenis_kerugian = inputs.get('jenis_kerugian')
-        jenis_ikan = inputs.get('jenis_ikan') 
-        quantity = int(inputs.get('quantity', 0))
-        keterangan = inputs.get('keterangan')
-        
-        if quantity <= 0:
-            raise ValueError("Quantity harus lebih dari 0")
-        
-        # Tentukan produk berdasarkan jenis ikan
-        if jenis_ikan == 'bibit':
-            product_name = "Bibit Ikan Mas"
-            cost_price = 1000  # Harga cost bibit
-        elif jenis_ikan == 'konsumsi':
-            product_name = "Ikan Mas Konsumsi"
-            cost_price = 13500  # Harga cost ikan konsumsi
-        else:
-            raise ValueError("Jenis ikan tidak valid")
-        
-        # Hitung total kerugian
-        total_kerugian = quantity * cost_price
-        
-        # Deskripsi lengkap
-        jenis_kerugian_text = {
-            'mati_di_jalan': 'Mati dalam Perjalanan',
-            'mati_di_kolam': 'Mati di Kolam',
-            'hibah_keluarga': 'Hibah ke Keluarga', 
-            'rusak': 'Rusak/Cacat',
-            'lainnya': 'Lainnya'
-        }.get(jenis_kerugian, 'Lainnya')
-        
-        description = f"Kerugian {jenis_kerugian_text} - {product_name} - {keterangan}"
-        
-        # Dapatkan account IDs
-        beban_kerugian_account = Account.query.filter_by(type='beban_kerugian').first()
-        persediaan_account = Account.query.filter_by(type='persediaan').first()
-        
-        if not beban_kerugian_account or not persediaan_account:
-            raise ValueError("Akun beban kerugian atau persediaan tidak ditemukan")
-        
-        # Buat entries jurnal
-        entries = [
-            {
-                'account_id': beban_kerugian_account.id,
-                'debit': total_kerugian,
-                'credit': 0,
-                'description': description
-            },
-            {
-                'account_id': persediaan_account.id, 
-                'debit': 0,
-                'credit': total_kerugian,
-                'description': f'Pengurangan persediaan {product_name}'
-            }
-        ]
-        
-        # Buat jurnal entry
-        transaction_number = generate_unique_transaction_number('LOSS')
-        journal = create_journal_entry(
-            transaction_number,
-            date,
-            description,
-            'general',
-            entries
-        )
-        
-        if journal:
-            # Update kartu persediaan
-            product = Product.query.filter_by(name=product_name).first()
-            if product:
-                # Update stok produk
-                product.stock -= quantity
-                
-                # Buat transaksi inventory
-                inventory_transaction = create_inventory_transaction(
-                    product_id=product.id,
-                    date=date,
-                    description=description,
-                    transaction_type='penyesuaian',
-                    quantity_in=0,
-                    quantity_out=quantity,
-                    unit_price=cost_price
-                )
-                
-                db.session.commit()
-                print(f"✅ Kerugian diproses: {product_name} -{quantity} unit, Total: Rp {total_kerugian:,}")
-            
-            return journal
-        else:
-            return None
-            
-    except Exception as e:
-        print(f"Error creating loss journal: {e}")
-        db.session.rollback()
-        raise e
 
 # ===== FUNGSI UPDATE INVENTORY DARI JURNAL =====
 def update_inventory_from_journal(journal, template, amounts, total_amount):
@@ -5784,6 +5672,10 @@ def get_chart_of_accounts_content():
         return '<div class="card"><p>Error loading Chart of Accounts</p></div>'
 
 # ===== ROUTES UTAMA =====
+@app.route("/")
+def home():
+    return "Hello from Flask!"
+
 @app.route('/')
 def index():
     if not current_user.is_authenticated:
@@ -6025,12 +5917,7 @@ def login():
                     Login dengan Google
                 </a>
             </div>
-            
-            <div style="margin-top: 1rem; padding: 1rem; background: rgba(49, 130, 206, 0.1); border-radius: var(--border-radius);">
-                <h4 style="margin-bottom: 0.5rem; color: var(--primary);"><i class="fas fa-info-circle"></i> Demo Accounts:</h4>
-                <p style="margin: 0.25rem 0; font-size: 0.9rem;"><strong>Customer:</strong> customer@example.com / customer123</p>
-                <p style="margin: 0.25rem 0; font-size: 0.9rem;"><strong>Seller:</strong> kang.mas1817@gmail.com / TugasSiaKangMas</p>
-            </div>
+
             
             <p style="text-align: center; margin-top: 1rem;">
                 Belum punya akun? <a href="/register" style="color: var(--primary); text-decoration: none; font-weight: 600;">Daftar sebagai Customer</a>
@@ -7989,97 +7876,65 @@ def get_transaction_template(template_key):
             return jsonify({'success': False, 'message': 'Template tidak ditemukan'})
         
         template = TRANSACTION_TEMPLATES[template_key]
+        accounts_map = {}
         
-        # FORM KHUSUS UNTUK KERUGIAN
-        if template_key == 'kerugian_ikan' and 'inputs' in template:
-            form_html = f'''
-            <form id="templateJournalForm">
-                <input type="hidden" name="template_key" value="{template_key}">
+        # Build accounts mapping
+        for account in Account.query.all():
+            accounts_map[account.type] = account
+        
+        form_html = f'''
+        <form id="templateJournalForm">
+            <input type="hidden" name="template_key" value="{template_key}">
+            
+            <div class="form-group">
+                <label class="form-label">Tanggal Transaksi</label>
+                <input type="date" name="date" class="form-control" required value="{datetime.now().strftime('%Y-%m-%d')}">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Keterangan</label>
+                <input type="text" name="description" class="form-control" value="{template['description']}" required>
+            </div>
+            
+            <h4 style="margin: 1.5rem 0 1rem 0; color: var(--primary);">Detail Akun:</h4>
+        '''
+        
+        # Counter untuk handle duplicate account types
+        account_counters = {}
+        
+        for i, entry in enumerate(template['entries']):
+            account = accounts_map.get(entry['account_type'])
+            if account:
+                # Handle duplicate account types
+                if entry['account_type'] in account_counters:
+                    account_counters[entry['account_type']] += 1
+                    input_id = f"amount_{entry['account_type']}_{account_counters[entry['account_type']]}"
+                else:
+                    account_counters[entry['account_type']] = 1
+                    input_id = f"amount_{entry['account_type']}"
                 
+                form_html += f'''
                 <div class="form-group">
-                    <label class="form-label">Tanggal Kerugian</label>
-                    <input type="date" name="date" class="form-control" required value="{datetime.now().strftime('%Y-%m-%d')}">
+                    <label class="form-label">
+                        {account.code} - {account.name} 
+                        <span style="color: {'var(--success)' if entry['side'] == 'debit' else 'var(--error)'}; font-weight: 600;">
+                            ({'Debit' if entry['side'] == 'debit' else 'Kredit'})
+                        </span>
+                    </label>
+                    <input type="number" id="{input_id}" name="{input_id}" 
+                           class="form-control" step="1" min="0" required 
+                           placeholder="Masukkan nominal {entry['description']}">
                 </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Jenis Kerugian</label>
-                    <select id="input_jenis_kerugian" name="jenis_kerugian" class="form-control" required>
-                        <option value="">Pilih Jenis Kerugian</option>
-            '''
-            
-            for value, label in template['inputs'][0]['options'].items():
-                form_html += f'<option value="{value}">{label}</option>'
-            
-            form_html += '''
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Jenis Ikan</label>
-                    <select id="input_jenis_ikan" name="jenis_ikan" class="form-control" required>
-                        <option value="">Pilih Jenis Ikan</option>
-            '''
-            
-            for value, label in template['inputs'][1]['options'].items():
-                form_html += f'<option value="{value}">{label}</option>'
-            
-            form_html += f'''
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Quantity (ekor)</label>
-                    <input type="number" id="input_quantity" name="quantity" class="form-control" 
-                           min="1" required placeholder="Masukkan jumlah ikan yang rugi">
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Keterangan Detail</label>
-                    <input type="text" id="input_keterangan" name="keterangan" class="form-control" 
-                           required placeholder="Contoh: Mati karena suhu ekstrim, diberikan ke saudara, dll">
-                </div>
-                
-                <div style="background: rgba(229, 62, 62, 0.1); padding: 1rem; border-radius: var(--border-radius); margin: 1rem 0;">
-                    <h5 style="color: var(--error); margin-bottom: 0.5rem;">Perhitungan Otomatis:</h5>
-                    <p style="margin: 0; font-size: 0.9rem;">
-                        <strong>Total Kerugian = Quantity × Harga Cost</strong><br>
-                        • Bibit Ikan Mas: Rp 1,000 per ekor<br>
-                        • Ikan Mas Konsumsi: Rp 13,500 per ekor
-                    </p>
-                </div>
-                
-                <button type="button" class="btn btn-danger" onclick="submitTemplateJournal()">
-                    <i class="fas fa-exclamation-triangle"></i> Catat Kerugian
-                </button>
-            </form>
-            
-            <script>
-            // Hitung estimasi kerugian saat input berubah
-            function calculateLossEstimate() {{
-                const jenisIkan = document.getElementById('input_jenis_ikan').value;
-                const quantity = parseInt(document.getElementById('input_quantity').value) || 0;
-                
-                let costPrice = 0;
-                if (jenisIkan === 'bibit') costPrice = 1000;
-                else if (jenisIkan === 'konsumsi') costPrice = 13500;
-                
-                const totalLoss = quantity * costPrice;
-                
-                if (totalLoss > 0) {{
-                    document.querySelector('div[style*="rgba(229, 62, 62, 0.1)"] p').innerHTML = 
-                        `<strong>Total Kerugian = Quantity × Harga Cost</strong><br>
-                         • Bibit Ikan Mas: Rp 1,000 per ekor<br>
-                         • Ikan Mas Konsumsi: Rp 13,500 per ekor<br>
-                         <strong style="color: var(--error);">ESTIMASI KERUGIAN: Rp ${{totalLoss.toLocaleString()}}</strong>`;
-                }}
-            }}
-            
-            document.getElementById('input_jenis_ikan').addEventListener('change', calculateLossEstimate);
-            document.getElementById('input_quantity').addEventListener('input', calculateLossEstimate);
-            </script>
-            '''
-            
-            return jsonify({'success': True, 'form_html': form_html})
+                '''
+        
+        form_html += '''
+            <button type="button" class="btn btn-primary" onclick="submitTemplateJournal()">
+                <i class="fas fa-save"></i> Simpan Jurnal
+            </button>
+        </form>
+        '''
+        
+        return jsonify({'success': True, 'form_html': form_html})
         
     except Exception as e:
         print(f"Error getting transaction template: {e}")
@@ -8794,15 +8649,13 @@ def add_template_journal():
         if template_key not in TRANSACTION_TEMPLATES:
             return jsonify({'success': False, 'message': 'Template tidak ditemukan'})
         
-        # HANDLE KHUSUS UNTUK KERUGIAN
-        if template_key == 'kerugian_ikan':
-            # Untuk kerugian, gunakan fungsi khusus
-            journal = create_loss_journal(template_key, date, amounts)
-        else:
-            # Untuk template lainnya, gunakan fungsi biasa
-            journal = create_journal_from_template(template_key, date, amounts)
+        # Create journal from template
+        journal = create_journal_from_template(template_key, date, amounts)
         
         if journal:
+            # HAPUS BARIS INI - tidak perlu panggil fungsi dobel
+            # update_inventory_from_purchase_journal(journal, template_key, amounts)
+            
             return jsonify({'success': True, 'message': 'Jurnal berhasil disimpan'})
         else:
             return jsonify({'success': False, 'message': 'Gagal membuat jurnal'})
@@ -9212,17 +9065,21 @@ def create_initial_data():
 # ===== JALANKAN APLIKASI =====
 if __name__ == '__main__':
     with app.app_context():
-        # Reset database untuk memastikan skema terbaru
-        reset_database_safe()
-        create_initial_data()
-        print("✅ Database initialized successfully!")
-        print("📊 Saldo Awal Persediaan:")
-        print("   - Bibit Ikan Mas: 2,975 ekor × Rp 1,000 = Rp 2,975,000")
-        print("   - Ikan Konsumsi: 150 ekor × Rp 13,500 = Rp 2,025,000") 
-        print("   - Total Persediaan: Rp 5,000,000")
+        try:
+            # Coba buat database jika belum ada
+            db.create_all()
+            print("✅ Database created successfully!")
+            
+            # Isi data awal
+            create_initial_data()
+            print("✅ Initial data created successfully!")
+            
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            print("Trying to continue...")
+        
         print("🔐 Seller Login: kang.mas1817@gmail.com / TugasSiaKangMas")
         print("🔐 Customer Login: customer@example.com / customer123")
         print("🚀 Server running on http://localhost:5000")
-        print("🔗 Test Supabase: http://localhost:5000/test-supabase")
     
     app.run(debug=True, port=5000)
