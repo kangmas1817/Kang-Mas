@@ -1,8 +1,9 @@
 import os
+import logging
 from pathlib import Path
 from flask import Flask, jsonify, request, redirect, url_for, session, flash, get_flashed_messages # pyright: ignore[reportMissingImports]
-from flask_sqlalchemy import SQLAlchemy # pyright: ignore[reportMissingImports] # pyright: ignore[reportMissingImports]
-from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user # pyright: ignore[reportMissingImports] # pyright: ignore[reportMissingImports]
+from flask_sqlalchemy import SQLAlchemy # pyright: ignore[reportMissingImports]
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user # pyright: ignore[reportMissingImports]
 from werkzeug.security import generate_password_hash, check_password_hash # pyright: ignore[reportMissingImports]
 from datetime import datetime, timedelta
 import json
@@ -16,22 +17,42 @@ from email.mime.text import MIMEText
 from dotenv import load_dotenv # pyright: ignore[reportMissingImports]
 from werkzeug.utils import secure_filename # pyright: ignore[reportMissingImports]
 import time
-from supabase import create_client, Client # pyright: ignore[reportMissingImports]
-from flask import Flask, render_template
-app = Flask(__name__)
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 
+# ===== 🎯 TEMPATKAN DI SINI - SETELAH app = Flask(__name__) =====
+# ==== KONFIGURASI SUPABASE YANG LEBIH AMAN ====
+def init_supabase():
+    """Initialize Supabase client dengan error handling"""
+    SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
+
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        logger.warning("Supabase credentials missing. SUPABASE_URL=%r", bool(SUPABASE_URL))
+        return None
+    else:
+        try:
+            from supabase import create_client
+            client = create_client(SUPABASE_URL, SUPABASE_KEY)
+            logger.info("Supabase client created successfully")
+            return client
+        except Exception as e:
+            logger.exception("Failed to create Supabase client: %s", e)
+            return None
+
+# Inisialisasi Supabase
+supabase = init_supabase()
+# ===== END OF SUPABASE CONFIG =====
+
 base_dir = Path(__file__).parent
 db_path = base_dir / "kangmas_shop.db"
-
-# Supabase Configuration
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_KEY = os.getenv('SUPABASE_KEY')
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ==== PERBAIKAN DATABASE - TAMBAHKAN INI ====
 # Jika DATABASE_URI tidak ada, gunakan SQLite
@@ -320,20 +341,29 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 # ===== SUPABASE HELPER FUNCTIONS =====
+# ==== GANTI fungsi helper Supabase ====
 def supabase_insert(table: str, data: dict):
-    """Insert data ke Supabase"""
+    """Insert data ke Supabase dengan error handling"""
+    if supabase is None:
+        logger.warning("Supabase client not available. Cannot insert to %s", table)
+        return None
+        
     try:
         response = supabase.table(table).insert(data).execute()
         if hasattr(response, 'error') and response.error:
-            print(f"Supabase insert error: {response.error}")
+            logger.error("Supabase insert error: %s", response.error)
             return None
         return response.data[0] if response.data else None
     except Exception as e:
-        print(f"Error inserting to Supabase: {e}")
+        logger.error("Error inserting to Supabase: %s", e)
         return None
 
 def supabase_select(table: str, query=None):
-    """Select data dari Supabase"""
+    """Select data dari Supabase dengan error handling"""
+    if supabase is None:
+        logger.warning("Supabase client not available. Cannot select from %s", table)
+        return []
+        
     try:
         if query:
             response = supabase.table(table).select("*").eq(query[0], query[1]).execute()
@@ -341,39 +371,51 @@ def supabase_select(table: str, query=None):
             response = supabase.table(table).select("*").execute()
         
         if hasattr(response, 'error') and response.error:
-            print(f"Supabase select error: {response.error}")
+            logger.error("Supabase select error: %s", response.error)
             return []
         return response.data
     except Exception as e:
-        print(f"Error selecting from Supabase: {e}")
+        logger.error("Error selecting from Supabase: %s", e)
         return []
 
 def supabase_update(table: str, data: dict, id: int):
-    """Update data di Supabase"""
+    """Update data di Supabase dengan error handling"""
+    if supabase is None:
+        logger.warning("Supabase client not available. Cannot update %s", table)
+        return None
+        
     try:
         response = supabase.table(table).update(data).eq('id', id).execute()
         if hasattr(response, 'error') and response.error:
-            print(f"Supabase update error: {response.error}")
+            logger.error("Supabase update error: %s", response.error)
             return None
         return response.data[0] if response.data else None
     except Exception as e:
-        print(f"Error updating Supabase: {e}")
+        logger.error("Error updating Supabase: %s", e)
         return None
 
 def supabase_delete(table: str, id: int):
-    """Delete data dari Supabase"""
+    """Delete data dari Supabase dengan error handling"""
+    if supabase is None:
+        logger.warning("Supabase client not available. Cannot delete from %s", table)
+        return False
+        
     try:
         response = supabase.table(table).delete().eq('id', id).execute()
         if hasattr(response, 'error') and response.error:
-            print(f"Supabase delete error: {response.error}")
+            logger.error("Supabase delete error: %s", response.error)
             return False
         return True
     except Exception as e:
-        print(f"Error deleting from Supabase: {e}")
+        logger.error("Error deleting from Supabase: %s", e)
         return False
     
 def sync_to_supabase(model_class, table_name):
-    """Sync data dari SQLAlchemy ke Supabase"""
+    """Sync data dari SQLAlchemy ke Supabase dengan error handling"""
+    if supabase is None:
+        logger.warning("Supabase client not available. Cannot sync %s", table_name)
+        return False
+        
     try:
         # Get all records from SQLAlchemy
         records = model_class.query.all()
@@ -391,16 +433,22 @@ def sync_to_supabase(model_class, table_name):
             
             if existing:
                 # Update existing record
-                supabase_update(table_name, data, data['id'])
-                print(f"✅ Updated {table_name} record {data['id']} in Supabase")
+                result = supabase_update(table_name, data, data['id'])
+                if result:
+                    logger.info("✅ Updated %s record %s in Supabase", table_name, data['id'])
+                else:
+                    logger.warning("❌ Failed to update %s record %s", table_name, data['id'])
             else:
                 # Insert new record
-                supabase_insert(table_name, data)
-                print(f"✅ Inserted {table_name} record {data['id']} to Supabase")
-                
+                result = supabase_insert(table_name, data)
+                if result:
+                    logger.info("✅ Inserted %s record %s to Supabase", table_name, data['id'])
+                else:
+                    logger.warning("❌ Failed to insert %s record %s", table_name, data['id'])
+                    
         return True
     except Exception as e:
-        print(f"Error syncing {table_name} to Supabase: {e}")
+        logger.error("Error syncing %s to Supabase: %s", table_name, e)
         return False
 
 # Tambahkan method to_dict untuk setiap model
@@ -9062,6 +9110,16 @@ def create_initial_data():
     
     print("✅ Initial data sync completed!")
 
+@app.route("/health")
+def health():
+    """Health check endpoint"""
+    supabase_status = "connected" if supabase is not None else "disconnected"
+    return jsonify({
+        "status": "healthy", 
+        "supabase": supabase_status,
+        "timestamp": datetime.now().isoformat()
+    }), 200
+
 # ===== JALANKAN APLIKASI =====
 if __name__ == '__main__':
     with app.app_context():
@@ -9081,5 +9139,6 @@ if __name__ == '__main__':
         print("🔐 Seller Login: kang.mas1817@gmail.com / TugasSiaKangMas")
         print("🔐 Customer Login: customer@example.com / customer123")
         print("🚀 Server running on http://localhost:5000")
+        print("🏥 Health check: http://localhost:5000/health")  # Tambahkan ini juga
     
     app.run(debug=True, port=5000)
