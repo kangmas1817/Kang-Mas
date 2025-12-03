@@ -1,20 +1,3 @@
-#!/usr/bin/env python3
-"""
-Kang-Mas Shop - Aplikasi E-commerce & Akuntansi Budidaya Ikan Mas
-File tunggal yang berisi semua dependencies dan environment variables
-
-Dependencies yang diperlukan:
-- Flask==2.3.3
-- Flask-SQLAlchemy==3.0.5
-- Flask-Login==0.6.3
-- Werkzeug==2.3.7
-- google-auth-oauthlib==1.0.0
-- google-auth==2.17.3
-- psycopg2-binary==2.9.7
-- gunicorn==21.2.0
-- greenlet==2.0.2
-"""
-
 # ===== LOAD ENVIRONMENT VARIABLES =====
 import os
 from dotenv import load_dotenv  # Tambahkan ini di import section
@@ -24,6 +7,7 @@ load_dotenv()
 
 # Configurations akan diambil dari environment variables atau default
 
+# ===== IMPORTS =====
 # ===== IMPORTS =====
 from pathlib import Path
 from flask import Flask, jsonify, request, redirect, url_for, session, flash, get_flashed_messages
@@ -41,6 +25,8 @@ import smtplib
 from email.mime.text import MIMEText
 from werkzeug.utils import secure_filename
 import time
+import os
+from dotenv import load_dotenv  # Pastikan ini diimpor
 
 # ===== INISIALISASI APLIKASI =====
 app = Flask(__name__)
@@ -55,17 +41,25 @@ if not os.getenv('DATABASE_URI'):
     print(f"✅ Database SQLite: {db_path}")
 
 ## ===== DATABASE CONFIGURATION FOR RENDER =====
+# ===== DATABASE CONFIGURATION FOR RENDER =====
 import os
 
 # Konfigurasi database untuk Render
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 if DATABASE_URL:
-    # Render menggunakan PostgreSQL, konversi URL jika perlu
+    print("✅ DATABASE_URL terdeteksi dari environment")
+    
+    # Konversi URL untuk menggunakan psycopg3 (psycopg[binary]) driver
+    # psycopg3 menggunakan prefix "postgresql+psycopg://"
     if DATABASE_URL.startswith('postgres://'):
-        DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+        DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql+psycopg://', 1)
+    elif DATABASE_URL.startswith('postgresql://'):
+        DATABASE_URL = DATABASE_URL.replace('postgresql://', 'postgresql+psycopg://', 1)
+    
     app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
-    print("✅ Menggunakan PostgreSQL dari Render")
+    print("✅ Menggunakan PostgreSQL dengan driver psycopg3 (psycopg[binary])")
+    
 else:
     # Untuk development lokal
     base_dir = Path(__file__).parent
@@ -78,8 +72,12 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'kang-mas-secret-2025')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_recycle': 300,
-    'pool_pre_ping': True
+    'pool_pre_ping': True,
+    'pool_size': 10,  # Tambah untuk PostgreSQL
+    'max_overflow': 20,  # Tambah untuk PostgreSQL
+    'pool_timeout': 30  # Tambah untuk PostgreSQL
 }
+
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'static/uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
