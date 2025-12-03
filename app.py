@@ -3028,6 +3028,221 @@ def verify_closing_entries():
         db.session.rollback()
         return None
 
+def get_post_closing_trial_balance():
+    """Generate Neraca Saldo Setelah Penutupan (Post-Closing Trial Balance) YANG BENAR"""
+    try:
+        # ===== 1. HITUNG SALDO MODAL AKHIR =====
+        # Dapatkan akun modal
+        modal_account = Account.query.filter_by(type='modal').first()
+        
+        # Hitung laba/rugi dari akun pendapatan dan beban
+        revenue_accounts = Account.query.filter_by(category='revenue').all()
+        expense_accounts = Account.query.filter_by(category='expense').all()
+        
+        total_revenue = sum(acc.balance for acc in revenue_accounts)
+        total_expenses = sum(acc.balance for acc in expense_accounts)
+        net_income = total_revenue - total_expenses
+        
+        # Dapatkan akun prive
+        prive_accounts = Account.query.filter_by(type='prive').all()
+        total_prive = sum(acc.balance for acc in prive_accounts)
+        
+        # Hitung modal akhir
+        # Modal Akhir = Modal Awal + Laba Bersih - Prive
+        modal_awal = modal_account.balance if modal_account else 0
+        modal_akhir = modal_awal + net_income - total_prive
+        
+        # ===== 2. TENTUKAN LABA ATAU RUGI =====
+        laba_rugi_text = "Laba" if net_income >= 0 else "Rugi"
+        laba_rugi_color = "success" if net_income >= 0 else "error"
+        
+        # ===== 3. FILTER AKUN REAL SAJA =====
+        # Akun yang muncul di post-closing trial balance:
+        # - Asset (Aset) - TETAP muncul
+        # - Liability (Kewajiban) - TETAP muncul  
+        # - Equity (Modal) - HANYA dengan saldo akhir yang sudah dihitung
+        # - TIDAK termasuk: Pendapatan, Beban, Prive, Ikhtisar Laba Rugi (harus 0)
+        
+        # Get REAL accounts
+        real_accounts = Account.query.filter(
+            Account.category.in_(['asset', 'liability', 'equity'])
+        ).order_by(Account.code).all()
+        
+        # ===== 3. BUAT TABLE HTML =====
+        table_html = f'''
+        <div class="card">
+            <h4 style="color: var(--primary); margin-bottom: 1.5rem;">
+                <i class="fas fa-balance-scale"></i> Neraca Saldo Setelah Penutupan (Post-Closing Trial Balance)
+            </h4>
+            
+            <div style="background: var(--ocean-light); padding: 1.5rem; border-radius: var(--border-radius); margin-bottom: 1.5rem;">
+                <h5 style="color: var(--primary); margin-bottom: 0.5rem;">
+                    <i class="fas fa-info-circle"></i> Informasi Modal:
+                </h5>
+                <table style="width: 100%; font-size: 0.9rem;">
+                    <tr>
+                        <td>Modal Awal</td>
+                        <td style="text-align: right;">Rp {modal_awal:,.0f}</td>
+                    </tr>
+                    <tr>
+                        <td>{laba_rugi_text} Bersih Periode</td>
+                        <td style="text-align: right; color: var(--{laba_rugi_color});">
+                            {'+' if net_income >= 0 else '-'} Rp {abs(net_income):,.0f}
+                        </td>
+                    </tr>
+        '''
+        
+        if total_prive > 0:
+            table_html += f'''
+                    <tr>
+                        <td>Prive</td>
+                        <td style="text-align: right; color: var(--error);">- Rp {total_prive:,.0f}</td>
+                    </tr>
+            '''
+            
+        table_html += f'''
+                    <tr style="font-weight: bold; border-top: 1px solid var(--primary);">
+                        <td>Modal Akhir (Digunakan di Neraca)</td>
+                        <td style="text-align: right; color: var(--primary); font-size: 1.1rem;">
+                            Rp {modal_akhir:,.0f}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+            
+            <div style="overflow-x: auto;">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Kode Akun</th>
+                            <th>Nama Akun</th>
+                            <th>Debit</th>
+                            <th>Kredit</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        '''
+        
+        total_debit = 0
+        total_credit = 0
+        
+        for account in real_accounts:
+            # Tentukan saldo yang akan ditampilkan
+            if account.type == 'modal':
+                # Gunakan saldo modal akhir yang sudah dihitung
+                balance_to_show = modal_akhir
+            else:
+                # Gunakan saldo normal dari database
+                balance_to_show = account.balance
+            
+            # Skip akun dengan saldo 0
+            if balance_to_show == 0:
+                continue
+            
+            # Tentukan debit/credit
+            if account.category == 'asset':
+                # Aset: saldo positif di debit
+                if balance_to_show >= 0:
+                    debit = balance_to_show
+                    credit = 0
+                else:
+                    debit = 0
+                    credit = abs(balance_to_show)
+            else:
+                # Kewajiban & Modal: saldo positif di credit
+                if balance_to_show >= 0:
+                    debit = 0
+                    credit = balance_to_show
+                else:
+                    debit = abs(balance_to_show)
+                    credit = 0
+            
+            total_debit += debit
+            total_credit += credit
+            
+            # Tentukan kategori untuk styling
+            if account.category == 'asset':
+                account_category = 'ASET'
+                category_class = 'success'
+            elif account.category == 'liability':
+                account_category = 'KEWAJIBAN'
+                category_class = 'error'
+            else:  # equity
+                account_category = 'MODAL'
+                category_class = 'primary'
+            
+            table_html += f'''
+            <tr>
+                <td><strong>{account.code}</strong></td>
+                <td>
+                    {account.name}
+                    <br>
+                    <small style="color: var(--{category_class}); font-size: 0.8rem; background: rgba(var(--{category_class}-rgb, 0, 0, 0), 0.1); padding: 2px 8px; border-radius: 12px;">
+                        {account_category}
+                    </small>
+                </td>
+                <td class="debit">{"Rp {0:,.0f}".format(debit) if debit > 0 else ""}</td>
+                <td class="credit">{"Rp {0:,.0f}".format(credit) if credit > 0 else ""}</td>
+            </tr>
+            '''
+        
+        # Hitung apakah seimbang
+        is_balanced = abs(total_debit - total_credit) < 0.01
+        
+        table_html += f'''
+                    </tbody>
+                    <tfoot>
+                        <tr style="font-weight: bold; border-top: 2px solid var(--primary); background: rgba(56, 161, 105, 0.1);">
+                            <td colspan="2">TOTAL</td>
+                            <td class="debit">Rp {total_debit:,.0f}</td>
+                            <td class="credit">Rp {total_credit:,.0f}</td>
+                        </tr>
+                        <tr style="background: {'rgba(56, 161, 105, 0.2)' if is_balanced else 'rgba(229, 62, 62, 0.2)'};">
+                            <td colspan="4" style="text-align: center; color: {'var(--success)' if is_balanced else 'var(--error)'}; font-weight: bold;">
+                                {'✅ NERACA SALDO SETELAH PENUTUPAN SEIMBANG' if is_balanced else '❌ NERACA SALDO SETELAH PENUTUPAN TIDAK SEIMBANG'}
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            
+            <!-- Verification Section -->
+            <div style="margin-top: 2rem; padding: 1.5rem; background: {'rgba(56, 161, 105, 0.1)' if is_balanced else 'rgba(229, 62, 62, 0.1)'}; border-radius: var(--border-radius);">
+                <h5 style="color: {'var(--success)' if is_balanced else 'var(--error)'}; margin-bottom: 1rem;">
+                    <i class="fas fa-{'check-circle' if is_balanced else 'exclamation-circle'}"></i>
+                    Verifikasi Keseimbangan
+                </h5>
+                
+                <div style="font-size: 0.9rem;">
+                    <p><strong>Persamaan Akuntansi:</strong></p>
+                    <p style="margin: 0.5rem 0;">Aset = Kewajiban + Modal</p>
+                    <p style="margin: 0.5rem 0; font-family: monospace;">
+                        {total_debit:,.0f} = {total_credit:,.0f}
+                    </p>
+                    
+                    {f'''
+                    <div style="margin-top: 1rem; padding: 1rem; background: rgba(229, 62, 62, 0.2); border-radius: var(--border-radius);">
+                        <p style="margin: 0; color: var(--error);">
+                            <strong>Selisih:</strong> Rp {abs(total_debit - total_credit):,.0f}
+                        </p>
+                        <p style="margin: 0.5rem 0 0 0; color: var(--error); font-size: 0.85rem;">
+                            <i class="fas fa-lightbulb"></i> Pastikan jurnal penutup sudah dibuat dengan benar!
+                        </p>
+                    </div>
+                    ''' if not is_balanced else ''}
+                </div>
+            </div>
+        </div>
+        '''
+        
+        return table_html
+        
+    except Exception as e:
+        print(f"Error generating post-closing trial balance: {e}")
+        import traceback
+        traceback.print_exc()
+        return f'<div class="card"><p>Error loading post-closing trial balance: {str(e)}</p></div>'
+
 def get_proper_closing_entries_html():
     """Generate HTML untuk jurnal penutup dengan format yang benar - DIPERBAIKI"""
     try:
@@ -5610,6 +5825,46 @@ def get_adjustment_journal_entries():
         print(f"Error generating adjustment journal entries: {e}")
         return '<div class="card"><p>Error loading adjustment journal entries</p></div>'
 
+def verify_nominal_accounts_closed():
+    """Verifikasi apakah semua akun nominal sudah ditutup (saldo = 0)"""
+    try:
+        # Cek akun nominal
+        revenue_accounts = Account.query.filter_by(category='revenue').all()
+        expense_accounts = Account.query.filter_by(category='expense').all()
+        prive_accounts = Account.query.filter_by(type='prive').all()
+        
+        all_closed = True
+        issues = []
+        
+        # Cek pendapatan
+        for acc in revenue_accounts:
+            if abs(acc.balance) > 0.01:
+                all_closed = False
+                issues.append(f"Pendapatan '{acc.name}' belum 0: Rp {acc.balance:,.0f}")
+        
+        # Cek beban
+        for acc in expense_accounts:
+            if abs(acc.balance) > 0.01:
+                all_closed = False
+                issues.append(f"Beban '{acc.name}' belum 0: Rp {acc.balance:,.0f}")
+        
+        # Cek prive
+        for acc in prive_accounts:
+            if abs(acc.balance) > 0.01:
+                all_closed = False
+                issues.append(f"Prive '{acc.name}' belum 0: Rp {acc.balance:,.0f}")
+        
+        return {
+            'all_closed': all_closed,
+            'issues': issues
+        }
+        
+    except Exception as e:
+        print(f"Error verifying nominal accounts: {e}")
+        return {'all_closed': False, 'issues': [f'Error: {str(e)}']}
+
+# ... di sini fungsi get_income_statement() dimulai ...
+
 def get_income_statement():
     """Generate income statement HTML"""
     try:
@@ -5711,8 +5966,9 @@ def get_simplified_accounting_content():
         <button class="tab" onclick="showTab('neraca-saldo', this)">Neraca Saldo</button>
         <button class="tab" onclick="showTab('jurnal-penyesuaian', this)">Jurnal Penyesuaian</button>
         <button class="tab" onclick="showTab('neraca-saldo-setelah', this)">Neraca Setelah Penyesuaian</button>
-        <button class="tab" onclick="showTab('jurnal-penutup', this)">Jurnal Penutup</button>
         <button class="tab" onclick="showTab('laporan-keuangan', this)">Laporan Keuangan</button>
+        <button class="tab" onclick="showTab('jurnal-penutup', this)">Jurnal Penutup</button>
+        <button class="tab" onclick="showTab('neraca-saldo-penutupan', this)">Neraca Saldo Setelah Penutupan</button>
     </div>
 
     <div id="chart-of-accounts" class="tab-content active">
@@ -5840,6 +6096,23 @@ def get_simplified_accounting_content():
         </div>
     </div>
 
+    <div id="laporan-keuangan" class="tab-content">
+        <div class="card">
+            <h3 style="color: var(--primary);"><i class="fas fa-chart-line"></i> Laporan Laba Rugi</h3>
+            {get_income_statement()}
+        </div>
+
+        <div class="card">
+            <h3 style="color: var(--primary);"><i class="fas fa-balance-scale-left"></i> Laporan Posisi Keuangan (Neraca)</h3>
+            {get_balance_sheet()}
+        </div>
+
+        <div class="card">
+            <h3 style="color: var(--primary);"><i class="fas fa-chart-line"></i> Laporan Perubahan Ekuitas</h3>
+            {get_equity_change_statement()}
+        </div>
+    </div>
+
     <div id="jurnal-penutup" class="tab-content">
         <div class="card">
             <h3 style="color: var(--primary);"><i class="fas fa-door-closed"></i> Jurnal Penutup</h3>
@@ -5853,20 +6126,13 @@ def get_simplified_accounting_content():
         </div>
     </div>
 
-    <div id="laporan-keuangan" class="tab-content">
+    <div id="neraca-saldo-penutupan" class="tab-content">
         <div class="card">
-            <h3 style="color: var(--primary);"><i class="fas fa-chart-line"></i> Laporan Laba Rugi</h3>
-            {get_income_statement()}
-        </div>
-
-        <div class="card">
-            <h3 style="color: var(--primary);"><i class="fas fa-balance-scale-left"></i> Laporan Posisi Keuangan</h3>
-            {get_balance_sheet()}
-        </div>
-
-        <div class="card">
-            <h3 style="color: var(--primary);"><i class="fas fa-chart-line"></i> Laporan Perubahan Ekuitas</h3>
-            {get_equity_change_statement()}
+            <h3 style="color: var(--primary);"><i class="fas fa-balance-scale"></i> Neraca Saldo Setelah Penutupan</h3>
+            <p style="margin-bottom: 1rem; color: #6B7280;">
+                <i class="fas fa-info-circle"></i> Neraca saldo yang hanya berisi akun REAL (Aset, Kewajiban, Modal) setelah semua akun nominal ditutup.
+            </p>
+            {get_post_closing_trial_balance()}
         </div>
     </div>
 
@@ -5878,6 +6144,15 @@ def get_simplified_accounting_content():
         if (closingTab) {{
             closingTab.addEventListener('click', function() {{
                 loadClosingTabContent();
+            }});
+        }}
+        
+        // Add event listener untuk tab Neraca Saldo Setelah Penutupan
+        const postClosingTab = document.querySelector('[onclick*="neraca-saldo-penutupan"]');
+        if (postClosingTab) {{
+            postClosingTab.addEventListener('click', function() {{
+                // Jika perlu refresh data, bisa tambahkan di sini
+                console.log("Tab Neraca Saldo Setelah Penutupan dibuka");
             }});
         }}
     }});
@@ -5900,6 +6175,11 @@ def get_simplified_accounting_content():
     // Load saat pertama kali halaman dibuka jika tab jurnal-penutup aktif
     if (document.getElementById('jurnal-penutup').classList.contains('active')) {{
         loadClosingTabContent();
+    }}
+    
+    // Load saat pertama kali halaman dibuka jika tab neraca-saldo-penutupan aktif
+    if (document.getElementById('neraca-saldo-penutupan').classList.contains('active')) {{
+        console.log("Tab Neraca Saldo Setelah Penutupan aktif saat halaman dimuat");
     }}
     </script>
     '''
