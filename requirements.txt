@@ -4,7 +4,8 @@ Flask-Login==0.6.3
 Werkzeug==2.3.7
 google-auth-oauthlib==1.0.0
 google-auth==2.17.3
-psycopg2-binary==2.9.7
+psycopg[binary]
 gunicorn==21.2.0
 blinker==1.7.0
 python-dotenv==1.0.1
+
