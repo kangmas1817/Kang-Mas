@@ -407,9 +407,9 @@ TRANSACTION_TEMPLATES = {
             {'account_type': 'modal', 'side': 'credit', 'description': 'Modal pemilik'}
         ]
     },
-        # 🎯 PEMBELIAN UTAMA - GUNAKAN INI
+ 
     'pembelian_sederhana': {
-        'name': 'Pembelian Sederhana',
+        'name': 'Pembelian Ikan',
         'description': 'Input pembelian produk dengan pilihan produk dan metode pembayaran',
         'entries': [
             {'account_type': 'persediaan', 'side': 'debit', 'description': 'Pembelian persediaan'},
@@ -494,45 +494,18 @@ TRANSACTION_TEMPLATES = {
         ]
     },
 
-    # ❌ PENJUALAN LAMA - DISEMBUNYIKAN
-    # 'penjualan_bibit_kredit': {
-    #     'name': 'Penjualan Bibit Ikan (Kredit) + HPP',
-    #     'description': 'Menjual bibit ikan secara kredit',
-    #     'entries': [
-    #         {'account_type': 'piutang', 'side': 'debit', 'description': 'Piutang penjualan bibit'},
-    #         {'account_type': 'pendapatan', 'side': 'credit', 'description': 'Pendapatan penjualan bibit'},
-    #         {'account_type': 'hpp', 'side': 'debit', 'description': 'Harga Pokok Penjualan bibit'},
-    #         {'account_type': 'persediaan', 'side': 'credit', 'description': 'Pengurangan persediaan bibit'}
-    #     ],
-    #     'inventory_effect': {'type': 'bibit', 'action': 'out'}
-    # },
-
-    # 🎯 PENJUALAN UTAMA - GUNAKAN INI
     'penjualan_sederhana': {
-        'name': 'Penjualan Sederhana',
+        'name': 'Penjualan Ikan',
         'description': 'Input penjualan produk dengan pilihan produk dan metode pembayaran',
         'entries': [
             {'account_type': 'kas', 'side': 'debit', 'description': 'Penerimaan kas dari penjualan'},
             {'account_type': 'piutang', 'side': 'debit', 'description': 'Piutang penjualan'},
             {'account_type': 'pendapatan', 'side': 'credit', 'description': 'Pendapatan penjualan'},
-            {'account_type': 'hpp', 'side': 'debit', 'description': 'Harga Pokok Penjualan'},
+            {'account_type': 'hpp', 'side': 'debit', 'description': 'Harga Pokok Produksi'},
             {'account_type': 'persediaan', 'side': 'credit', 'description': 'Pengurangan persediaan'}
         ],
         'inventory_effect': {'type': 'auto', 'action': 'out'}
     },
-
-    # ❌ PENJUALAN LAMA - DISEMBUNYIKAN
-    # 'penjualan_bibit_tunai': {
-    #     'name': 'Penjualan Bibit Ikan (Tunai) + HPP',
-    #     'description': 'Menjual bibit ikan secara tunai',
-    #     'entries': [
-    #         {'account_type': 'kas', 'side': 'debit', 'description': 'Penerimaan penjualan bibit'},
-    #         {'account_type': 'pendapatan', 'side': 'credit', 'description': 'Pendapatan penjualan bibit'},
-    #         {'account_type': 'hpp', 'side': 'debit', 'description': 'Harga Pokok Penjualan bibit'},
-    #         {'account_type': 'persediaan', 'side': 'credit', 'description': 'Pengurangan persediaan bibit'}
-    #     ],
-    #     'inventory_effect': {'type': 'bibit', 'action': 'out'}
-    # },
 
     'penerimaan_piutang': {
         'name': 'Penerimaan Pembayaran Piutang',
@@ -542,30 +515,6 @@ TRANSACTION_TEMPLATES = {
             {'account_type': 'piutang', 'side': 'credit', 'description': 'Piutang dilunasi'}
         ]
     },
-
-    # ❌ PENJUALAN LAMA - DISEMBUNYIKAN
-    # 'penjualan_ikan_tunai': {
-    #     'name': 'Penjualan Ikan Konsumsi (Tunai) + HPP',
-    #     'description': 'Menjual ikan mas konsumsi secara tunai',
-    #     'entries': [
-    #         {'account_type': 'kas', 'side': 'debit', 'description': 'Penerimaan penjualan ikan'},
-    #         {'account_type': 'pendapatan', 'side': 'credit', 'description': 'Pendapatan penjualan ikan'},
-    #         {'account_type': 'hpp', 'side': 'debit', 'description': 'Harga Pokok Penjualan ikan'},
-    #         {'account_type': 'persediaan', 'side': 'credit', 'description': 'Pengurangan persediaan ikan'}
-    #     ],
-    #     'inventory_effect': {'type': 'ikan_konsumsi', 'action': 'out'}
-    # },
-    # 'penjualan_ikan_kredit': {
-    #     'name': 'Penjualan Ikan Konsumsi (Kredit) + HPP',
-    #     'description': 'Menjual ikan mas konsumsi secara kredit',
-    #     'entries': [
-    #         {'account_type': 'piutang', 'side': 'debit', 'description': 'Piutang penjualan ikan'},
-    #         {'account_type': 'pendapatan', 'side': 'credit', 'description': 'Pendapatan penjualan ikan'},
-    #         {'account_type': 'hpp', 'side': 'debit', 'description': 'Harga Pokok Penjualan ikan'},
-    #         {'account_type': 'persediaan', 'side': 'credit', 'description': 'Pengurangan persediaan ikan'}
-    #     ],
-    #     'inventory_effect': {'type': 'ikan_konsumsi', 'action': 'out'}
-    # },
 
     'kerugian_bibit_mati': {
         'name': 'Kerugian Bibit Ikan Mati',
@@ -584,28 +533,6 @@ TRANSACTION_TEMPLATES = {
             {'account_type': 'kas', 'side': 'credit', 'description': 'Pembayaran tunai'}
         ]
     },
-    'pembelian_bibit_tunai': {
-        'name': 'Pembelian Bibit Tunai',
-        'description': 'Membeli bibit ikan mas secara tunai',
-        'entries': [
-            {'account_type': 'persediaan', 'side': 'debit', 'description': 'Pembelian bibit tunai'},
-            {'account_type': 'kas', 'side': 'credit', 'description': 'Pembayaran tunai'}
-        ],
-        'inventory_effect': {'type': 'bibit', 'action': 'in'}
-    },
-
-    # ❌ PENJUALAN LAMA - DISEMBUNYIKAN
-    # 'penjualan_bibit_ongkir_pembeli': {
-    #     'name': 'Penjualan Bibit - Ongkir Pembeli (Tunai)',
-    #     'description': 'Menjual bibit, biaya pengiriman dibayar pembeli',
-    #     'entries': [
-    #         {'account_type': 'kas', 'side': 'debit', 'description': 'Penerimaan penjualan bibit'},
-    #         {'account_type': 'pendapatan', 'side': 'credit', 'description': 'Pendapatan penjualan bibit'},
-    #         {'account_type': 'hpp', 'side': 'debit', 'description': 'Harga Pokok Penjualan bibit'},
-    #         {'account_type': 'persediaan', 'side': 'credit', 'description': 'Pengurangan persediaan bibit'}
-    #     ],
-    #     'inventory_effect': {'type': 'bibit', 'action': 'out'}
-    # },
 
     'hibah_bibit_ke_keluarga': {
         'name': 'Bibit Diberikan ke Saudara (Kerugian)',
@@ -681,32 +608,7 @@ ADJUSTMENT_TEMPLATES = {
             {'name': 'umur_manfaat', 'label': 'Umur Manfaat (tahun)', 'type': 'number', 'required': True}
         ]
     },
-    'penyesuaian_persediaan_bibit': {
-        'name': 'Penyesuaian Persediaan Bibit',
-        'description': 'Penyesuaian nilai persediaan bibit ikan berdasarkan stock opname',
-        'calculation': 'HPP = Persediaan Awal - Persediaan Akhir',
-        'entries': [
-            {'account_type': 'hpp', 'side': 'debit', 'description': 'Harga pokok penjualan bibit'},
-            {'account_type': 'persediaan', 'side': 'credit', 'description': 'Pengurangan persediaan bibit'}
-        ],
-        'inputs': [
-            {'name': 'persediaan_akhir', 'label': 'Persediaan Bibit Akhir (ekor)', 'type': 'number', 'required': True},
-            {'name': 'harga_per_ekor', 'label': 'Harga Per Ekor Bibit', 'type': 'number', 'required': True}
-        ]
-    },
-    'penyesuaian_persediaan_ikan': {
-        'name': 'Penyesuaian Persediaan Ikan Konsumsi',
-        'description': 'Penyesuaian nilai persediaan ikan konsumsi berdasarkan stock opname',
-        'calculation': 'HPP = Persediaan Awal - Persediaan Akhir',
-        'entries': [
-            {'account_type': 'hpp', 'side': 'debit', 'description': 'Harga pokok penjualan ikan'},
-            {'account_type': 'persediaan', 'side': 'credit', 'description': 'Pengurangan persediaan ikan'}
-        ],
-        'inputs': [
-            {'name': 'persediaan_akhir', 'label': 'Persediaan Ikan Akhir (kg)', 'type': 'number', 'required': True},
-            {'name': 'harga_per_kg', 'label': 'Harga Per Kg Ikan', 'type': 'number', 'required': True}
-        ]
-    },
+   
     'akrual_pendapatan': {
         'name': 'Akrual Pendapatan',
         'description': 'Pencatatan pendapatan yang sudah diterima tapi belum diakui',
@@ -1314,7 +1216,7 @@ def update_hpp_automatically(order):
 
                 # Buat jurnal HPP
                 transaction_number = generate_unique_transaction_number('HPP')
-                description = f"HPP untuk penjualan {product.name} - Order #{order.order_number}"
+                description = f"Harga Pokok Produksi untuk penjualan {product.name}" - Order #{order.order_number}"
 
                 # Get accounts
                 hpp_account = Account.query.filter_by(type='hpp').first()
@@ -1607,7 +1509,7 @@ def create_purchase_journal(order):
 
 # ===== FUNGSI BUKU BESAR =====
 def get_ledger_data():
-    """Ambil data untuk buku besar - sesuai dengan perhitungan neraca saldo"""
+    """Ambil data untuk buku besar - termasuk jurnal penjualan"""
     try:
         # Dapatkan semua akun
         all_accounts = Account.query.order_by(Account.code).all()
@@ -1626,15 +1528,15 @@ def get_ledger_data():
             elif account.type == 'peralatan':
                 opening_balance = 5000000
             elif account.type == 'hutang':
-                opening_balance = 20000000
+                opening_balance = 26500000
             elif account.type == 'pendapatan':
-                opening_balance = 6500000
+                opening_balance = 0
 
-            # Dapatkan semua transaksi jurnal umum untuk akun ini
+            # PERBAIKAN: Ambil SEMUA transaksi jurnal termasuk 'sales'
             journal_details = JournalDetail.query.join(JournalEntry).filter(
                 JournalDetail.account_id == account.id,
-                JournalEntry.journal_type == 'general'
-            ).order_by(JournalDetail.journal_id).all()
+                JournalEntry.journal_type.in_(['general', 'sales', 'purchase', 'hpp', 'adjustment'])
+            ).order_by(JournalEntry.date, JournalDetail.id).all()
 
             # Hanya tampilkan akun yang punya saldo atau transaksi
             if abs(opening_balance) > 0 or journal_details:
@@ -2583,46 +2485,148 @@ def calculate_hpp(product_id, quantity_sold):
 
 # ==== TAMBAH FUNGSI JURNAL PENUTUP DI SINI ====
 def create_closing_entries():
-    """Buat jurnal penutup untuk menutup akun nominal"""
+    """Buat jurnal penutup yang benar sesuai prinsip akuntansi"""
     try:
-        # Hitung laba/rugi bersih
+        print("🔄 Membuat jurnal penutup yang benar...")
+        
+        # 1. Hitung total pendapatan dan beban (TANPA HPP)
         revenue_accounts = Account.query.filter_by(category='revenue').all()
-        expense_accounts = Account.query.filter_by(category='expense').all()
-
+        expense_accounts = Account.query.filter(
+            Account.category == 'expense',
+            Account.type != 'hpp'  # KECUALI HPP
+        ).all()
+        
         total_revenue = sum(acc.balance for acc in revenue_accounts)
         total_expenses = sum(acc.balance for acc in expense_accounts)
         net_income = total_revenue - total_expenses
-
+        
+        print(f"📊 Total Pendapatan: Rp {total_revenue:,.0f}")
+        print(f"📊 Total Beban (tanpa HPP): Rp {total_expenses:,.0f}")
+        print(f"📊 Laba/Rugi Bersih: Rp {net_income:,.0f}")
+        
+        if total_revenue == 0 and total_expenses == 0:
+            print("ℹ️ Tidak ada akun nominal untuk ditutup")
+            return None
+        
+        # Buat akun Ikhtisar Laba Rugi jika belum ada
+        ikhtisar_account = Account.query.filter_by(type='ikhtisar_laba_rugi').first()
+        if not ikhtisar_account:
+            ikhtisar_account = Account(
+                code='399',
+                name='Ikhtisar Laba Rugi',
+                type='ikhtisar_laba_rugi',
+                category='temporary',
+                balance=0
+            )
+            db.session.add(ikhtisar_account)
+            db.session.flush()
+            print("✅ Akun Ikhtisar Laba Rugi dibuat")
+        
         # Buat jurnal penutup
         transaction_number = generate_unique_transaction_number('CLS')
-        description = f"Jurnal Penutup - {'Laba' if net_income >= 0 else 'Rugi'} Bersih Periode"
-
-        entries = []
-
-        # Tutup akun pendapatan
-        for revenue_acc in revenue_accounts:
-            if revenue_acc.balance > 0:
-                entries.append({
-                    'account_id': revenue_acc.id,
-                    'debit': 0,
-                    'credit': revenue_acc.balance,
-                    'description': f'Penutupan akun pendapatan {revenue_acc.name}'
-                })
-
-        # Tutup akun beban
-        for expense_acc in expense_accounts:
-            if expense_acc.balance > 0:
-                entries.append({
-                    'account_id': expense_acc.id,
-                    'debit': expense_acc.balance,
-                    'credit': 0,
-                    'description': f'Penutupan akun beban {expense_acc.name}'
-                })
-
-        # Transfer laba/rugi ke modal
+        date = datetime.now()
+        
+        # ===== 1. TUTUP AKUN PENDAPATAN =====
+        print("1️⃣ Menutup akun pendapatan...")
+        if total_revenue > 0:
+            entry1 = JournalEntry(
+                transaction_number=f"{transaction_number}-1",
+                date=date,
+                description="Penutupan akun pendapatan ke Ikhtisar Laba Rugi",
+                journal_type='closing_revenue'
+            )
+            db.session.add(entry1)
+            db.session.flush()
+            
+            # Tutup setiap akun pendapatan
+            for revenue_acc in revenue_accounts:
+                if revenue_acc.balance > 0:
+                    # Debit akun pendapatan (mengurangi ke nol)
+                    detail1 = JournalDetail(
+                        journal_id=entry1.id,
+                        account_id=revenue_acc.id,
+                        debit=revenue_acc.balance,
+                        credit=0,
+                        description=f'Penutupan akun pendapatan {revenue_acc.name}'
+                    )
+                    db.session.add(detail1)
+                    
+                    # Credit ikhtisar laba rugi
+                    detail2 = JournalDetail(
+                        journal_id=entry1.id,
+                        account_id=ikhtisar_account.id,
+                        debit=0,
+                        credit=revenue_acc.balance,
+                        description=f'Penerimaan pendapatan {revenue_acc.name}'
+                    )
+                    db.session.add(detail2)
+                    
+                    # Update saldo pendapatan jadi 0
+                    revenue_acc.balance = 0
+                    
+                    print(f"   ✅ Pendapatan {revenue_acc.name}: Rp {revenue_acc.balance:,.0f} ditutup")
+            
+            db.session.commit()
+            print("✅ Semua akun pendapatan ditutup")
+        
+        # ===== 2. TUTUP AKUN BEBAN (TANPA HPP) =====
+        print("2️⃣ Menutup akun beban (tanpa HPP)...")
+        if total_expenses > 0:
+            entry2 = JournalEntry(
+                transaction_number=f"{transaction_number}-2",
+                date=date,
+                description="Penutupan akun beban ke Ikhtisar Laba Rugi",
+                journal_type='closing_expense'
+            )
+            db.session.add(entry2)
+            db.session.flush()
+            
+            # Tutup setiap akun beban (KECUALI HPP)
+            for expense_acc in expense_accounts:
+                if expense_acc.balance > 0 and expense_acc.type != 'hpp':
+                    # Debit ikhtisar laba rugi
+                    detail1 = JournalDetail(
+                        journal_id=entry2.id,
+                        account_id=ikhtisar_account.id,
+                        debit=expense_acc.balance,
+                        credit=0,
+                        description=f'Beban {expense_acc.name}'
+                    )
+                    db.session.add(detail1)
+                    
+                    # Credit akun beban (mengurangi ke nol)
+                    detail2 = JournalDetail(
+                        journal_id=entry2.id,
+                        account_id=expense_acc.id,
+                        debit=0,
+                        credit=expense_acc.balance,
+                        description=f'Penutupan akun beban {expense_acc.name}'
+                    )
+                    db.session.add(detail2)
+                    
+                    # Update saldo beban jadi 0
+                    expense_acc.balance = 0
+                    
+                    print(f"   ✅ Beban {expense_acc.name}: Rp {expense_acc.balance:,.0f} ditutup")
+                elif expense_acc.type == 'hpp' and expense_acc.balance > 0:
+                    print(f"   ⚠️ HPP {expense_acc.name}: Rp {expense_acc.balance:,.0f} TIDAK ditutup (sudah 0 dari penyesuaian)")
+            
+            db.session.commit()
+            print("✅ Semua akun beban (tanpa HPP) ditutup")
+        
+        # ===== 3. TUTUP IKHTISAR LABA RUGI KE MODAL =====
+        print("3️⃣ Menutup Ikhtisar Laba Rugi ke Modal...")
+        
+        # Hitung saldo akhir ikhtisar
+        ikhtisar_debit = sum(d.debit for d in ikhtisar_account.journal_details)
+        ikhtisar_credit = sum(d.credit for d in ikhtisar_account.journal_details)
+        ikhtisar_balance = ikhtisar_credit - ikhtisar_debit  # Credit - Debit
+        
+        print(f"   Saldo Ikhtisar: Rp {ikhtisar_balance:,.0f}")
+        
+        # Dapatkan akun modal
         modal_account = Account.query.filter_by(type='modal').first()
         if not modal_account:
-            # Buat akun modal jika belum ada
             modal_account = Account(
                 code='301',
                 name='Modal Pemilik',
@@ -2632,76 +2636,473 @@ def create_closing_entries():
             )
             db.session.add(modal_account)
             db.session.flush()
-
-        if net_income >= 0:
-            # Laba
-            entries.append({
-                'account_id': modal_account.id,
-                'debit': 0,
-                'credit': net_income,
-                'description': 'Transfer laba bersih ke modal'
-            })
-        else:
-            # Rugi
-            entries.append({
-                'account_id': modal_account.id,
-                'debit': abs(net_income),
-                'credit': 0,
-                'description': 'Transfer rugi bersih ke modal'
-            })
-
-        # Buat jurnal penutup
+            print("✅ Akun Modal dibuat")
+        
+        entry3 = JournalEntry(
+            transaction_number=f"{transaction_number}-3",
+            date=date,
+            description=f"Pemindahan {'laba' if ikhtisar_balance >= 0 else 'rugi'} ke Modal",
+            journal_type='closing_ikhtisar'
+        )
+        db.session.add(entry3)
+        db.session.flush()
+        
+        if ikhtisar_balance >= 0:  # LABA
+            # Laba: Debit Ikhtisar, Credit Modal
+            detail1 = JournalDetail(
+                journal_id=entry3.id,
+                account_id=ikhtisar_account.id,
+                debit=ikhtisar_balance,
+                credit=0,
+                description='Pemindahan laba ke modal'
+            )
+            detail2 = JournalDetail(
+                journal_id=entry3.id,
+                account_id=modal_account.id,
+                debit=0,
+                credit=ikhtisar_balance,
+                description='Penambahan modal dari laba'
+            )
+            
+            # Update saldo modal
+            modal_account.balance += ikhtisar_balance
+            
+            print(f"   ✅ Laba Rp {ikhtisar_balance:,.0f} ditambahkan ke modal")
+        else:  # RUGI
+            # Rugi: Debit Modal, Credit Ikhtisar
+            rugi_amount = abs(ikhtisar_balance)
+            
+            detail1 = JournalDetail(
+                journal_id=entry3.id,
+                account_id=modal_account.id,
+                debit=rugi_amount,
+                credit=0,
+                description='Pengurangan modal karena rugi'
+            )
+            detail2 = JournalDetail(
+                journal_id=entry3.id,
+                account_id=ikhtisar_account.id,
+                debit=0,
+                credit=rugi_amount,
+                description='Pemindahan rugi dari ikhtisar'
+            )
+            
+            # Update saldo modal
+            modal_account.balance -= rugi_amount
+            
+            print(f"   ✅ Rugi Rp {rugi_amount:,.0f} dikurangi dari modal")
+        
+        db.session.add(detail1)
+        db.session.add(detail2)
+        
+        # ===== 4. TUTUP AKUN PRIVE (jika ada) =====
+        print("4️⃣ Menutup akun prive...")
+        # Cari akun prive
+        prive_accounts = Account.query.filter_by(type='prive').all()
+        
+        if prive_accounts:
+            entry4 = JournalEntry(
+                transaction_number=f"{transaction_number}-4",
+                date=date,
+                description="Penutupan akun prive ke Modal",
+                journal_type='closing_prive'
+            )
+            db.session.add(entry4)
+            db.session.flush()
+            
+            for prive_acc in prive_accounts:
+                if prive_acc.balance > 0:
+                    # Prive normal balance di debit, jadi untuk menutup:
+                    # Debit Modal, Credit Prive
+                    
+                    detail1 = JournalDetail(
+                        journal_id=entry4.id,
+                        account_id=modal_account.id,
+                        debit=prive_acc.balance,
+                        credit=0,
+                        description=f'Pengurangan modal untuk prive {prive_acc.name}'
+                    )
+                    detail2 = JournalDetail(
+                        journal_id=entry4.id,
+                        account_id=prive_acc.id,
+                        debit=0,
+                        credit=prive_acc.balance,
+                        description='Penutupan akun prive'
+                    )
+                    
+                    db.session.add(detail1)
+                    db.session.add(detail2)
+                    
+                    # Update saldo modal dan prive
+                    modal_account.balance -= prive_acc.balance
+                    prive_acc.balance = 0
+                    
+                    print(f"   ✅ Prive {prive_acc.name}: Rp {prive_acc.balance:,.0f} ditutup")
+        
+        # ===== COMMIT SEMUA PERUBAHAN =====
+        db.session.commit()
+        
+        print("✅ JURNAL PENUTUP SELESAI DIBUAT")
+        print(f"📋 Ringkasan:")
+        print(f"   - Pendapatan ditutup: Rp {total_revenue:,.0f}")
+        print(f"   - Beban ditutup: Rp {total_expenses:,.0f}")
+        print(f"   - HPP TIDAK DITUTUP (sudah 0 dari penyesuaian)")
+        print(f"   - {'Laba' if net_income >= 0 else 'Rugi'} bersih: Rp {abs(net_income):,.0f}")
+        print(f"   - Saldo Modal akhir: Rp {modal_account.balance:,.0f}")
+        
+        # BUAT CLOSING ENTRY UNTUK TRACKING
         closing_entry = ClosingEntry(
             transaction_number=transaction_number,
-            date=datetime.now(),
-            description=description
+            date=date,
+            description=f"Jurnal Penutup Periode - {'Laba' if net_income >= 0 else 'Rugi'} Rp {abs(net_income):,.0f}"
         )
         db.session.add(closing_entry)
-        db.session.flush()
-
-        # Buat detail jurnal
-        for entry_data in entries:
-            detail = ClosingDetail(
-                closing_id=closing_entry.id,
-                account_id=entry_data['account_id'],
-                debit=entry_data['debit'],
-                credit=entry_data['credit'],
-                description=entry_data['description']
-            )
-            db.session.add(detail)
-
-            # Update saldo akun
-            account = Account.query.get(entry_data['account_id'])
-            if account.category in ['asset', 'expense']:
-                account.balance += entry_data['debit'] - entry_data['credit']
-            else:
-                account.balance += entry_data['credit'] - entry_data['debit']
-
+        
+        # Simpan detail ke ClosingDetail untuk record
+        for journal_entry in [entry1, entry2, entry3, entry4]:
+            if journal_entry:
+                for detail in journal_entry.journal_details:
+                    closing_detail = ClosingDetail(
+                        closing_id=closing_entry.id,
+                        account_id=detail.account_id,
+                        debit=detail.debit,
+                        credit=detail.credit,
+                        description=detail.description
+                    )
+                    db.session.add(closing_detail)
+        
         db.session.commit()
-
+        
         return closing_entry
-
+        
     except Exception as e:
-        print(f"Error creating closing entries: {e}")
+        print(f"❌ Error creating closing entries: {e}")
+        import traceback
+        traceback.print_exc()
+        db.session.rollback()
+        return None
+        
+def verify_closing_entries():
+    """Verifikasi apakah jurnal penutup sudah benar"""
+    try:
+        print("🔍 Verifikasi Jurnal Penutup...")
+        
+        # Cek pendapatan - HARUS 0
+        revenue_accounts = Account.query.filter_by(category='revenue').all()
+        total_revenue = sum(acc.balance for acc in revenue_accounts)
+        
+        # Cek beban (tanpa HPP) - HARUS 0
+        expense_accounts = Account.query.filter(
+            Account.category == 'expense',
+            Account.type != 'hpp'
+        ).all()
+        total_expenses = sum(acc.balance for acc in expense_accounts)
+        
+        # Cek HPP - BOLEH TIDAK 0 (karena penyesuaian)
+        hpp_accounts = Account.query.filter_by(type='hpp').all()
+        total_hpp = sum(acc.balance for acc in hpp_accounts)
+        
+        print(f"📊 Status Akhir:")
+        print(f"   Total Pendapatan: Rp {total_revenue:,.0f} {'✅ NOL' if total_revenue == 0 else '❌ BELUM NOL'}")
+        print(f"   Total Beban (tanpa HPP): Rp {total_expenses:,.0f} {'✅ NOL' if total_expenses == 0 else '❌ BELUM NOL'}")
+        print(f"   Total HPP: Rp {total_hpp:,.0f} {'⚠️ BOLEH TIDAK NOL' if total_hpp != 0 else '✅ OK'}")
+        
+        if total_revenue == 0 and total_expenses == 0:
+            print("✅ Jurnal penutup sudah benar!")
+            return True
+        else:
+            print("⚠️ Jurnal penutup belum sempurna")
+            return False
+            
+    except Exception as e:
+        print(f"Error verifying closing entries: {e}")
+        return False
+
+        # ===== 2. TUTUP AKUN BEBAN =====
+        print("2️⃣ Menutup akun beban...")
+        if total_expenses > 0:
+            entry2 = JournalEntry(
+                transaction_number=f"{transaction_number}-2",
+                date=date,
+                description="Penutupan akun beban ke Ikhtisar Laba Rugi",
+                journal_type='closing_expense'
+            )
+            db.session.add(entry2)
+            db.session.flush()
+            
+            # Tutup setiap akun beban
+            for expense_acc in expense_accounts:
+                if expense_acc.balance > 0:
+                    # Debit ikhtisar laba rugi
+                    detail1 = JournalDetail(
+                        journal_id=entry2.id,
+                        account_id=ikhtisar_account.id,
+                        debit=expense_acc.balance,
+                        credit=0,
+                        description=f'Beban {expense_acc.name}'
+                    )
+                    db.session.add(detail1)
+                    
+                    # Credit akun beban (mengurangi ke nol)
+                    detail2 = JournalDetail(
+                        journal_id=entry2.id,
+                        account_id=expense_acc.id,
+                        debit=0,
+                        credit=expense_acc.balance,
+                        description=f'Penutupan akun beban {expense_acc.name}'
+                    )
+                    db.session.add(detail2)
+                    
+                    # Update saldo beban jadi 0
+                    expense_acc.balance = 0
+                    
+                    print(f"   ✅ Beban {expense_acc.name}: Rp {expense_acc.balance:,.0f} ditutup")
+            
+            db.session.commit()
+            print("✅ Semua akun beban ditutup")
+        
+        # ===== 3. TUTUP IKHTISAR LABA RUGI KE MODAL =====
+        print("3️⃣ Menutup Ikhtisar Laba Rugi ke Modal...")
+        
+        # Hitung saldo akhir ikhtisar
+        ikhtisar_debit = sum(d.debit for d in ikhtisar_account.journal_details)
+        ikhtisar_credit = sum(d.credit for d in ikhtisar_account.journal_details)
+        ikhtisar_balance = ikhtisar_credit - ikhtisar_debit  # Credit - Debit
+        
+        print(f"   Saldo Ikhtisar: Rp {ikhtisar_balance:,.0f}")
+        
+        # Dapatkan akun modal
+        modal_account = Account.query.filter_by(type='modal').first()
+        if not modal_account:
+            modal_account = Account(
+                code='301',
+                name='Modal Pemilik',
+                type='modal',
+                category='equity',
+                balance=0
+            )
+            db.session.add(modal_account)
+            db.session.flush()
+            print("✅ Akun Modal dibuat")
+        
+        entry3 = JournalEntry(
+            transaction_number=f"{transaction_number}-3",
+            date=date,
+            description=f"Pemindahan {'laba' if ikhtisar_balance >= 0 else 'rugi'} ke Modal",
+            journal_type='closing_ikhtisar'
+        )
+        db.session.add(entry3)
+        db.session.flush()
+        
+        if ikhtisar_balance >= 0:  # LABA
+            # Laba: Debit Ikhtisar, Credit Modal
+            detail1 = JournalDetail(
+                journal_id=entry3.id,
+                account_id=ikhtisar_account.id,
+                debit=ikhtisar_balance,
+                credit=0,
+                description='Pemindahan laba ke modal'
+            )
+            detail2 = JournalDetail(
+                journal_id=entry3.id,
+                account_id=modal_account.id,
+                debit=0,
+                credit=ikhtisar_balance,
+                description='Penambahan modal dari laba'
+            )
+            
+            # Update saldo modal
+            modal_account.balance += ikhtisar_balance
+            
+            print(f"   ✅ Laba Rp {ikhtisar_balance:,.0f} ditambahkan ke modal")
+        else:  # RUGI
+            # Rugi: Debit Modal, Credit Ikhtisar
+            rugi_amount = abs(ikhtisar_balance)
+            
+            detail1 = JournalDetail(
+                journal_id=entry3.id,
+                account_id=modal_account.id,
+                debit=rugi_amount,
+                credit=0,
+                description='Pengurangan modal karena rugi'
+            )
+            detail2 = JournalDetail(
+                journal_id=entry3.id,
+                account_id=ikhtisar_account.id,
+                debit=0,
+                credit=rugi_amount,
+                description='Pemindahan rugi dari ikhtisar'
+            )
+            
+            # Update saldo modal
+            modal_account.balance -= rugi_amount
+            
+            print(f"   ✅ Rugi Rp {rugi_amount:,.0f} dikurangi dari modal")
+        
+        db.session.add(detail1)
+        db.session.add(detail2)
+        
+        # ===== 4. TUTUP AKUN PRIVE (jika ada) =====
+        print("4️⃣ Menutup akun prive...")
+        # Cari akun prive
+        prive_accounts = Account.query.filter_by(type='prive').all()
+        
+        if prive_accounts:
+            entry4 = JournalEntry(
+                transaction_number=f"{transaction_number}-4",
+                date=date,
+                description="Penutupan akun prive ke Modal",
+                journal_type='closing_prive'
+            )
+            db.session.add(entry4)
+            db.session.flush()
+            
+            for prive_acc in prive_accounts:
+                if prive_acc.balance > 0:
+                    # Prive normal balance di debit, jadi untuk menutup:
+                    # Debit Modal, Credit Prive
+                    
+                    detail1 = JournalDetail(
+                        journal_id=entry4.id,
+                        account_id=modal_account.id,
+                        debit=prive_acc.balance,
+                        credit=0,
+                        description=f'Pengurangan modal untuk prive {prive_acc.name}'
+                    )
+                    detail2 = JournalDetail(
+                        journal_id=entry4.id,
+                        account_id=prive_acc.id,
+                        debit=0,
+                        credit=prive_acc.balance,
+                        description='Penutupan akun prive'
+                    )
+                    
+                    db.session.add(detail1)
+                    db.session.add(detail2)
+                    
+                    # Update saldo modal dan prive
+                    modal_account.balance -= prive_acc.balance
+                    prive_acc.balance = 0
+                    
+                    print(f"   ✅ Prive {prive_acc.name}: Rp {prive_acc.balance:,.0f} ditutup")
+        
+        # ===== COMMIT SEMUA PERUBAHAN =====
+        db.session.commit()
+        
+        # Buat closing entry untuk tracking
+        closing_entry = ClosingEntry(
+            transaction_number=transaction_number,
+            date=date,
+            description=f"Jurnal Penutup Periode - {'Laba' if net_income >= 0 else 'Rugi'} Rp {abs(net_income):,.0f}"
+        )
+        db.session.add(closing_entry)
+        
+        # Simpan detail ke ClosingDetail untuk record
+        for journal_entry in [entry1, entry2, entry3, entry4]:
+            if journal_entry:
+                for detail in journal_entry.journal_details:
+                    closing_detail = ClosingDetail(
+                        closing_id=closing_entry.id,
+                        account_id=detail.account_id,
+                        debit=detail.debit,
+                        credit=detail.credit,
+                        description=detail.description
+                    )
+                    db.session.add(closing_detail)
+        
+        db.session.commit()
+        
+        print("✅ JURNAL PENUTUP SELESAI DIBUAT")
+        print(f"📋 Ringkasan:")
+        print(f"   - Pendapatan ditutup: Rp {total_revenue:,.0f}")
+        print(f"   - Beban ditutup: Rp {total_expenses:,.0f}")
+        print(f"   - {'Laba' if net_income >= 0 else 'Rugi'} bersih: Rp {abs(net_income):,.0f}")
+        print(f"   - Saldo Modal akhir: Rp {modal_account.balance:,.0f}")
+        
+        return closing_entry
+        
+    except Exception as e:
+        print(f"❌ Error creating closing entries: {e}")
+        import traceback
+        traceback.print_exc()
         db.session.rollback()
         return None
 
-def get_closing_entries_html():
-    """Generate HTML untuk jurnal penutup"""
+def get_proper_closing_entries_html():
+    """Generate HTML untuk jurnal penutup dengan format yang benar - DIPERBAIKI"""
     try:
-        closing_entries = ClosingEntry.query.order_by(ClosingEntry.date.desc()).all()
+        # CARI DARI JournalEntry, bukan ClosingEntry
+        closing_journals = JournalEntry.query.filter(
+            JournalEntry.journal_type.in_(['closing_revenue', 'closing_expense', 'closing_ikhtisar', 'closing_prive'])
+        ).order_by(JournalEntry.date.desc()).all()
 
-        if not closing_entries:
+        if not closing_journals:
             return '''
             <div class="card">
-                <h4 style="color: var(--primary);">Belum Ada Jurnal Penutup</h4>
-                <p>Jurnal penutup akan dibuat di akhir periode akuntansi.</p>
+                <h4 style="color: var(--primary);">
+                    <i class="fas fa-door-closed"></i> Belum Ada Jurnal Penutup
+                </h4>
+                <p style="color: #6B7280; margin-bottom: 1rem;">
+                    Jurnal penutup akan dibuat secara otomatis di akhir periode akuntansi untuk menutup akun nominal.
+                </p>
+                
+                <div style="background: var(--ocean-light); padding: 1.5rem; border-radius: var(--border-radius); margin: 1rem 0;">
+                    <h5 style="color: var(--primary); margin-bottom: 0.5rem;">
+                        <i class="fas fa-info-circle"></i> Apa itu Jurnal Penutup?
+                    </h5>
+                    <p style="margin-bottom: 0.5rem; font-size: 0.9rem;">
+                        Jurnal penutup adalah jurnal yang dibuat di akhir periode akuntansi untuk:
+                    </p>
+                    <ol style="margin: 0; padding-left: 1.2rem; font-size: 0.9rem;">
+                        <li>Menutup semua akun pendapatan</li>
+                        <li>Menutup semua akun beban</li>
+                        <li>Memindahkan saldo ke Ikhtisar Laba Rugi</li>
+                        <li>Memindahkan laba/rugi ke akun Modal</li>
+                        <li>Menutup akun Prive (jika ada)</li>
+                    </ol>
+                </div>
+                
+                <div class="grid grid-2" style="margin-top: 1.5rem;">
+                    <div style="padding: 1rem; background: rgba(56, 161, 105, 0.1); border-radius: var(--border-radius);">
+                        <h6 style="color: var(--success); margin-bottom: 0.5rem;">
+                            <i class="fas fa-calculator"></i> Langkah-langkah:
+                        </h6>
+                        <ol style="margin: 0; padding-left: 1.2rem; font-size: 0.85rem;">
+                            <li>Pendapatan → Ikhtisar Laba Rugi</li>
+                            <li>Beban → Ikhtisar Laba Rugi</li>
+                            <li>Ikhtisar Laba Rugi → Modal</li>
+                            <li>Prive → Modal</li>
+                        </ol>
+                    </div>
+                    
+                    <div style="padding: 1rem; background: rgba(49, 130, 206, 0.1); border-radius: var(--border-radius);">
+                        <h6 style="color: var(--primary); margin-bottom: 0.5rem;">
+                            <i class="fas fa-check-circle"></i> Hasil Akhir:
+                        </h6>
+                        <ul style="margin: 0; padding-left: 1.2rem; font-size: 0.85rem;">
+                            <li>Pendapatan = 0</li>
+                            <li>Beban = 0</li>
+                            <li>Modal = Modal Awal + Laba - Rugi</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
             '''
 
+        # Group by transaction number
+        transactions = {}
+        for journal in closing_journals:
+            # Ekstrak base transaction number (tanpa -1, -2, dll)
+            base_number = journal.transaction_number.split('-')[0]
+            if base_number not in transactions:
+                transactions[base_number] = []
+            transactions[base_number].append(journal)
+
         table_html = '''
         <div class="card">
-            <h4 style="color: var(--primary); margin-bottom: 1.5rem;"><i class="fas fa-door-closed"></i> Jurnal Penutup</h4>
+            <h4 style="color: var(--primary); margin-bottom: 1.5rem;">
+                <i class="fas fa-door-closed"></i> Jurnal Penutup
+            </h4>
             <div style="overflow-x: auto;">
                 <table class="table">
                     <thead>
@@ -2717,28 +3118,43 @@ def get_closing_entries_html():
                     <tbody>
         '''
 
-        for closing in closing_entries:
-            # Add transaction header
-            table_html += f'''
-            <tr style="background: rgba(180, 81, 35, 0.05);">
-                <td><strong>{closing.date.strftime('%d/%m/%Y')}</strong></td>
-                <td><strong>{closing.transaction_number}</strong></td>
-                <td colspan="4"><strong>{closing.description}</strong></td>
-            </tr>
-            '''
-
-            # Add account details
-            for detail in closing.closing_details:
+        for base_number, journals in transactions.items():
+            # Sort journals by type untuk urutan yang benar
+            type_order = ['closing_revenue', 'closing_expense', 'closing_ikhtisar', 'closing_prive']
+            journals.sort(key=lambda x: type_order.index(x.journal_type) if x.journal_type in type_order else 99)
+            
+            # Group by journal untuk menghindari duplikasi header
+            grouped_journals = {}
+            for journal in journals:
+                if journal.id not in grouped_journals:
+                    grouped_journals[journal.id] = journal
+            
+            for journal in grouped_journals.values():
+                # Add journal header
                 table_html += f'''
-                <tr>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td>{detail.account.code} - {detail.account.name}</td>
-                    <td class="debit">{"Rp {0:,.0f}".format(detail.debit) if detail.debit > 0 else ""}</td>
-                    <td class="credit">{"Rp {0:,.0f}".format(detail.credit) if detail.credit > 0 else ""}</td>
+                <tr style="background: rgba(180, 81, 35, 0.05);">
+                    <td><strong>{journal.date.strftime('%d/%m/%Y')}</strong></td>
+                    <td><strong>{journal.transaction_number}</strong></td>
+                    <td colspan="4"><strong>{journal.description}</strong></td>
                 </tr>
                 '''
+                
+                # Add account details
+                for detail in journal.journal_details:
+                    account = Account.query.get(detail.account_id)
+                    account_name = account.name if account else "Unknown"
+                    account_code = account.code if account else ""
+                    
+                    table_html += f'''
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td>{account_code} - {account_name}</td>
+                        <td class="debit">{"Rp {0:,.0f}".format(detail.debit) if detail.debit > 0 else ""}</td>
+                        <td class="credit">{"Rp {0:,.0f}".format(detail.credit) if detail.credit > 0 else ""}</td>
+                    </tr>
+                    '''
 
         table_html += '''
                     </tbody>
@@ -3381,13 +3797,20 @@ def base_html(title, content, additional_css="", additional_js=""):
 
         /* Logo Styling */
         .navbar-logo {{
-            width: 45px;
-            height: 45px;
-            border-radius: 12px;
-            object-fit: cover;
-            margin-right: 12px;
-            box-shadow: var(--shadow-md);
-            border: 2px solid rgba(255, 255, 255, 0.3);
+            width: 140px !important; 
+            height: 140px !important; 
+            max-width: 140px;
+            max-height: 140px;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            object-fit: contain; 
+            margin-right: 30px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border: none !important;
+            display: block;
+            float: left;
+            background: transparent !important;
+            padding: 0;
         }}
 
         /* Ocean Modal Styles */
@@ -3564,7 +3987,9 @@ def base_html(title, content, additional_css="", additional_js=""):
     <nav class="navbar">
         <div class="nav-container">
             <a href="/" class="nav-brand">
-                <img src="{app_logo}" alt="{app_name}" class="navbar-logo" onerror="this.style.display='none'">
+                <img src="{app_logo}" alt="{app_name}" class="navbar-logo" 
+                    style="background: none; border: none; box-shadow: none; width: 140px; height: 140px;"
+                    onerror="this.style.display='none'">
                 <span>{app_name}</span>
             </a>
 
@@ -3923,10 +4348,10 @@ def base_html(title, content, additional_css="", additional_js=""):
                                 'Produk: ' + productName + '\\n' +
                                 'Quantity: ' + quantity + ' unit\\n' +
                                 'Harga Jual: Rp ' + sellingPrice.toLocaleString() + ' per unit\\n' +
-                                'Harga Beli: Rp ' + costPrice.toLocaleString() + ' per unit\\n' +
+                                'Harga Pokok Produksi: Rp ' + costPrice.toLocaleString() + ' per unit\\n' +
                                 'Metode: ' + (paymentMethod === 'tunai' ? 'Tunai' : 'Kredit') + '\\n\\n' +
                                 'Total Penjualan: Rp ' + totalSales.toLocaleString() + '\\n' +
-                                'Total HPP: Rp ' + totalHpp.toLocaleString() + '\\n\\n' +
+                                'Total Harga Pokok Produksi: Rp ' + totalHpp.toLocaleString() + '\\n\\n' +
                                 'Buat jurnal penjualan?';
 
             if (!confirm(confirmMessage)) {{
@@ -4617,7 +5042,18 @@ Mohon dipersiapkan pesanannya ya. Terima kasih! 😊`;
 
         // Jurnal Penutup Functions
         function createClosingEntries() {{
-            if (!confirm('Apakah Anda yakin ingin membuat jurnal penutup? Tindakan ini akan menutup semua akun pendapatan dan beban.')) {{
+            // Tampilkan konfirmasi detail
+            const confirmMessage = 'APAKAH ANDA YAKIN INGIN MEMBUAT JURNAL PENUTUP?\\n\\n' +
+                                'Jurnal penutup akan:\\n' +
+                                '1. Menutup semua akun pendapatan ke 0\\n' +
+                                '2. Menutup semua akun beban ke 0\\n' +
+                                '3. Menghitung laba/rugi bersih\\n' +
+                                '4. Memindahkan laba/rugi ke akun Modal\\n' +
+                                '5. Menutup akun Prive (jika ada)\\n\\n' +
+                                'Proses ini TIDAK DAPAT DIBATALKAN!\\n\\n' +
+                                'Lanjutkan membuat jurnal penutup?';
+
+            if (!confirm(confirmMessage)) {{
                 return;
             }}
 
@@ -4634,19 +5070,54 @@ Mohon dipersiapkan pesanannya ya. Terima kasih! 😊`;
             .then(data => {{
                 if (data.success) {{
                     showNotification('✅ ' + data.message, 'success');
-                    setTimeout(() => location.reload(), 2000);
+                    
+                    // 🔄 TAMPILKAN TAB JURNAL PENUTUP SETELAH BERHASIL
+                    setTimeout(() => {{
+                        // Aktifkan tab Jurnal Penutup
+                        const closingTab = document.querySelector('[onclick*=\"jurnal-penutup\"]');
+                        if (closingTab) {{
+                            closingTab.click();
+                        }}
+                        
+                        // Refresh konten tab Jurnal Penutup
+                        refreshClosingTabContent();
+                        
+                        button.innerHTML = originalText;
+                        button.disabled = false;
+                    }}, 1500);
                 }} else {{
                     showNotification('❌ ' + data.message, 'error');
+                    button.innerHTML = originalText;
+                    button.disabled = false;
                 }}
             }})
             .catch(error => {{
                 showNotification('❌ Terjadi error saat membuat jurnal penutup', 'error');
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }});
+        }}
+
+        // Fungsi untuk refresh konten tab Jurnal Penutup
+        function refreshClosingTabContent() {{
+            // Ambil tab content untuk Jurnal Penutup
+            const closingTabContent = document.getElementById('jurnal-penutup');
+            if (!closingTabContent) return;
+
+            // Tampilkan loading
+            closingTabContent.innerHTML = '<div style=\"text-align: center; padding: 2rem;\"><div class=\"loading\"></div> Memuat ulang data jurnal penutup...</div>';
+
+            // Ambil data terbaru dari server
+            fetch('/api/get_closing_entries_html')
+            .then(response => response.text())
+            .then(html => {{
+                // Ganti konten tab dengan data terbaru
+                closingTabContent.innerHTML = html;
+                console.log('✅ Tab Jurnal Penutup di-refresh');
             }})
-            .finally(() => {{
-                setTimeout(() => {{
-                    button.innerHTML = originalText;
-                    button.disabled = false;
-                }}, 2000);
+            .catch(error => {{
+                console.error('Error refreshing closing tab:', error);
+                closingTabContent.innerHTML = '<div class=\"card\"><p>Error loading closing entries</p></div>';
             }});
         }}
 
@@ -4992,10 +5463,10 @@ def get_adjusted_trial_balance():
         return '<tr><td colspan="4">Error loading adjusted trial balance</td></tr>'
 
 def get_general_journal_entries():
-    """Hanya tampilkan jurnal umum (type = 'general')"""
+    """Tampilkan jurnal umum DAN jurnal penjualan"""
     try:
         journal_entries = JournalEntry.query.filter(
-            JournalEntry.journal_type.in_(['general', 'sales'])
+            JournalEntry.journal_type.in_(['general', 'sales', 'purchase', 'hpp'])
         ).order_by(JournalEntry.date.desc()).all()
 
         if not journal_entries:
@@ -5015,6 +5486,7 @@ def get_general_journal_entries():
                         <tr>
                             <th>Tanggal</th>
                             <th>No. Transaksi</th>
+                            <th>Tipe</th>
                             <th>Keterangan</th>
                             <th>Akun</th>
                             <th>Debit</th>
@@ -5025,11 +5497,23 @@ def get_general_journal_entries():
         '''
 
         for journal in journal_entries:
+            # Tipe jurnal untuk identifikasi
+            type_badge = ""
+            if journal.journal_type == 'sales':
+                type_badge = '<span class="badge" style="background: var(--success);">Penjualan</span>'
+            elif journal.journal_type == 'purchase':
+                type_badge = '<span class="badge" style="background: var(--primary);">Pembelian</span>'
+            elif journal.journal_type == 'hpp':
+                type_badge = '<span class="badge" style="background: var(--warning);">HPP</span>'
+            else:
+                type_badge = '<span class="badge" style="background: var(--info);">Umum</span>'
+
             # Add transaction header
             table_html += f'''
             <tr style="background: rgba(49, 130, 206, 0.05);">
                 <td><strong>{journal.date.strftime('%d/%m/%Y')}</strong></td>
                 <td><strong>{journal.transaction_number}</strong></td>
+                <td>{type_badge}</td>
                 <td colspan="4"><strong>{journal.description}</strong></td>
             </tr>
             '''
@@ -5038,6 +5522,7 @@ def get_general_journal_entries():
             for detail in journal.journal_details:
                 table_html += f'''
                 <tr>
+                    <td></td>
                     <td></td>
                     <td></td>
                     <td></td>
@@ -5205,7 +5690,7 @@ def get_income_statement():
 # Dalam fungsi get_simplified_accounting_content(), cari bagian saldo awal dan perbaiki:
 def get_simplified_accounting_content():
     """Konten akuntansi yang disederhanakan - OTOMATIS dari database"""
-
+    
     # Get template options
     template_options = ""
     for key, template in TRANSACTION_TEMPLATES.items():
@@ -5280,7 +5765,6 @@ def get_simplified_accounting_content():
         </div>
     </div>
 
-    <!-- TAMBAHKAN TAB CONTENT UNTUK BUKU BESAR -->
     <div id="buku-besar" class="tab-content">
         <div class="card">
             <h3 style="color: var(--primary);"><i class="fas fa-book"></i> Buku Besar</h3>
@@ -5359,12 +5843,13 @@ def get_simplified_accounting_content():
     <div id="jurnal-penutup" class="tab-content">
         <div class="card">
             <h3 style="color: var(--primary);"><i class="fas fa-door-closed"></i> Jurnal Penutup</h3>
-
-            <button class="btn btn-success" onclick="createClosingEntries()">
-                <i class="fas fa-calculator"></i> Buat Jurnal Penutup Otomatis
-            </button>
-
-            {get_closing_entries_html()}
+            
+            <!-- Konten akan dimuat via JavaScript -->
+            <div id="closing-tab-content">
+                <div style="text-align: center; padding: 2rem;">
+                    <div class="loading"></div> Memuat data jurnal penutup...
+                </div>
+            </div>
         </div>
     </div>
 
@@ -5384,6 +5869,39 @@ def get_simplified_accounting_content():
             {get_equity_change_statement()}
         </div>
     </div>
+
+    <script>
+    // Load closing entries saat tab dibuka
+    document.addEventListener('DOMContentLoaded', function() {{
+        // Add event listener untuk tab Jurnal Penutup
+        const closingTab = document.querySelector('[onclick*="jurnal-penutup"]');
+        if (closingTab) {{
+            closingTab.addEventListener('click', function() {{
+                loadClosingTabContent();
+            }});
+        }}
+    }});
+
+    function loadClosingTabContent() {{
+        const container = document.getElementById('closing-tab-content');
+        if (!container) return;
+        
+        fetch('/api/get_closing_entries_html')
+        .then(response => response.text())
+        .then(html => {{
+            container.innerHTML = html;
+        }})
+        .catch(error => {{
+            console.error('Error loading closing tab:', error);
+            container.innerHTML = '<div class="card"><p>Error loading closing entries</p></div>';
+        }});
+    }}
+
+    // Load saat pertama kali halaman dibuka jika tab jurnal-penutup aktif
+    if (document.getElementById('jurnal-penutup').classList.contains('active')) {{
+        loadClosingTabContent();
+    }}
+    </script>
     '''
 
     return content
@@ -5623,8 +6141,7 @@ def get_chart_of_accounts_content():
         return '<div class="card"><p>Error loading Chart of Accounts</p></div>'
 
 # ===== ROUTES UTAMA =====
-
-
+# ===== ROUTES UTAMA =====
 @app.route('/')
 def index():
     if not current_user.is_authenticated:
@@ -5632,8 +6149,9 @@ def index():
 
     try:
         settings = {s.key: s.value for s in AppSetting.query.all()}
-        featured_products = Product.query.filter_by(is_featured=True).limit(3).all()
+        featured_products = Product.query.filter_by(is_featured=True).limit(4).all()
 
+        # Featured Products HTML
         featured_html = ""
         for product in featured_products:
             weight_info = f"{product.weight_kg}kg" if product.weight_kg else f"{product.size_cm}cm"
@@ -5646,63 +6164,304 @@ def index():
                 '''
 
             featured_html += f'''
-                <div class="card product-card">
-                    <img src="{product.image_url}" alt="{product.name}" class="product-image" onerror="this.style.display='none'">
-                    <h3 style="margin-bottom: 0.5rem; color: var(--dark);">{product.name}</h3>
-                    <p style="color: #6B7280; margin-bottom: 1rem;">{product.description}</p>
-                    <div class="price" style="margin-bottom: 0.5rem;">Rp {product.price:,.0f}</div>
-                    <p style="color: #6B7280; font-size: 0.9rem;">Stock: {product.stock} | {weight_info}</p>
-                    {add_to_cart_btn}
+            <div class="card product-card" style="text-align: center; padding: 1.5rem;">
+                <div style="position: relative;">
+                    <img src="{product.image_url}" alt="{product.name}" class="product-image" 
+                         style="height: 200px; object-fit: cover; border-radius: 12px;"
+                         onerror="this.src='https://via.placeholder.com/300x200/4F46E5/ffffff?text=Kang+Mas+Shop'">
+                    {product.is_featured and '<span style="position: absolute; top: 10px; right: 10px; background: var(--error); color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.8rem;">🔥 Unggulan</span>' or ''}
                 </div>
+                <h3 style="margin: 1rem 0 0.5rem 0; color: var(--dark); font-size: 1.2rem;">{product.name}</h3>
+                <p style="color: #6B7280; font-size: 0.9rem; margin-bottom: 1rem; min-height: 40px;">{product.description[:60]}...</p>
+                <div class="price" style="color: var(--primary); font-weight: bold; font-size: 1.3rem; margin-bottom: 0.5rem;">Rp {product.price:,.0f}</div>
+                <div style="display: flex; justify-content: center; gap: 1rem; margin-bottom: 1rem;">
+                    <span style="background: var(--ocean-light); padding: 0.25rem 0.75rem; border-radius: 15px; font-size: 0.8rem;">
+                        <i class="fas fa-box"></i> Stock: {product.stock}
+                    </span>
+                    <span style="background: var(--ocean-light); padding: 0.25rem 0.75rem; border-radius: 15px; font-size: 0.8rem;">
+                        <i class="fas fa-weight"></i> {weight_info}
+                    </span>
+                </div>
+                {add_to_cart_btn}
+            </div>
             '''
 
-        # Tentukan button berdasarkan user type
+        # Determine user button based on user type
         if current_user.user_type == 'customer':
             user_button = '''
-                <a href="/products" class="btn btn-primary" style="margin-top: 1rem;">
+                <a href="/products" class="btn btn-primary" style="padding: 1rem 2rem; font-size: 1.1rem; margin-top: 1rem;">
                     <i class="fas fa-store"></i> Lihat Semua Produk
+                </a>
+                <a href="/cart" class="btn btn-success" style="padding: 1rem 2rem; font-size: 1.1rem; margin-top: 1rem; margin-left: 1rem;">
+                    <i class="fas fa-shopping-cart"></i> Keranjang Saya
                 </a>
             '''
         else:
             user_button = '''
-                <a href="/seller/dashboard" class="btn btn-primary" style="margin-top: 1rem;">
+                <a href="/seller/dashboard" class="btn btn-primary" style="padding: 1rem 2rem; font-size: 1.1rem; margin-top: 1rem;">
                     <i class="fas fa-chart-line"></i> Seller Dashboard
+                </a>
+                <a href="/seller/accounting" class="btn btn-success" style="padding: 1rem 2rem; font-size: 1.1rem; margin-top: 1rem; margin-left: 1rem;">
+                    <i class="fas fa-chart-bar"></i> Sistem Akuntansi
                 </a>
             '''
 
         content = f'''
-        <div class="hero">
-            <h1>{settings.get('app_name', 'Kang-Mas Shop')}</h1>
-            <p>{settings.get('app_description', 'Sejak 2017 - Melayani dengan Kualitas Terbaik')}</p>
-            <p><em>Ikan mas segar langsung dari kolam Magelang</em></p>
-
-            <div style="margin-top: 2rem;">
-                <p style="font-size: 1.2rem;">
-                    Selamat datang kembali, <strong>{current_user.full_name}</strong>!
+        <!-- Hero Section -->
+        <div class="hero" style="position: relative; overflow: hidden;">
+            <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, rgba(181, 81, 35, 0.9) 0%, rgba(228, 122, 36, 0.9) 100%); z-index: 1;"></div>
+            <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: url('https://images.unsplash.com/photo-1516466723877-e4ec1d736c8a?q=80&w=2070&auto=format&fit=crop') center/cover; opacity: 0.3; z-index: 0;"></div>
+            
+            <div style="position: relative; z-index: 2; text-align: center; padding: 4rem 2rem;">
+                <h1 style="font-size: 3.5rem; margin-bottom: 1.5rem; font-family: 'Poppins', sans-serif; font-weight: 800; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">
+                    {settings.get('app_name', 'Kang-Mas Shop')}
+                </h1>
+                <p style="font-size: 1.25rem; margin-bottom: 1rem; opacity: 0.9; max-width: 600px; margin-left: auto; margin-right: auto;">
+                    {settings.get('app_description', 'Sejak 2017 - Melayani dengan Kualitas Terbaik')}
                 </p>
-                {user_button}
+                <p style="font-size: 1.1rem; margin-bottom: 2rem; font-style: italic; opacity: 0.9;">
+                    <i class="fas fa-fish"></i> Ikan mas segar langsung dari kolam Magelang
+                </p>
+
+                <div style="margin-top: 2rem; background: rgba(255,255,255,0.2); padding: 1.5rem; border-radius: var(--border-radius); backdrop-filter: blur(10px); max-width: 500px; margin-left: auto; margin-right: auto;">
+                    <p style="font-size: 1.2rem; margin-bottom: 1rem;">
+                        Selamat datang kembali, <strong style="color: var(--white);">{current_user.full_name}</strong>!
+                    </p>
+                    <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                        {user_button}
+                    </div>
+                </div>
             </div>
         </div>
 
-        <h2 style="margin-bottom: 2rem; text-align: center; color: var(--primary);">
-            <i class="fas fa-star"></i> Produk Unggulan
-        </h2>
-        <div class="grid grid-3">
-            {featured_html}
+        <!-- Features Section -->
+        <div style="margin: 4rem 0;">
+            <h2 style="text-align: center; color: var(--primary); margin-bottom: 3rem; font-size: 2.5rem;">
+                <i class="fas fa-star"></i> Mengapa Memilih Kami?
+            </h2>
+            
+            <div class="grid grid-4">
+                <div class="card" style="text-align: center; padding: 2rem;">
+                    <div style="width: 70px; height: 70px; background: linear-gradient(135deg, var(--primary) 0%, var(--ocean-deep) 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
+                        <i class="fas fa-award" style="color: white; font-size: 1.8rem;"></i>
+                    </div>
+                    <h3 style="margin-bottom: 1rem; color: var(--dark);">Kualitas Terbaik</h3>
+                    <p style="color: #6B7280;">Ikan segar langsung dari kolam dengan kualitas premium</p>
+                </div>
+                
+                <div class="card" style="text-align: center; padding: 2rem;">
+                    <div style="width: 70px; height: 70px; background: linear-gradient(135deg, var(--success) 0%, var(--teal) 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
+                        <i class="fas fa-shipping-fast" style="color: white; font-size: 1.8rem;"></i>
+                    </div>
+                    <h3 style="margin-bottom: 1rem; color: var(--dark);">Pengiriman Cepat</h3>
+                    <p style="color: #6B7280;">Dikirim langsung setelah panen, tetap segar sampai tujuan</p>
+                </div>
+                
+                <div class="card" style="text-align: center; padding: 2rem;">
+                    <div style="width: 70px; height: 70px; background: linear-gradient(135deg, var(--warning) 0%, #b7791f 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
+                        <i class="fas fa-headset" style="color: white; font-size: 1.8rem;"></i>
+                    </div>
+                    <h3 style="margin-bottom: 1rem; color: var(--dark);">Customer Service</h3>
+                    <p style="color: #6B7280;">Tim kami siap membantu 24/7 via WhatsApp</p>
+                </div>
+                
+                <div class="card" style="text-align: center; padding: 2rem;">
+                    <div style="width: 70px; height: 70px; background: linear-gradient(135deg, var(--error) 0%, #c53030 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
+                        <i class="fas fa-shield-alt" style="color: white; font-size: 1.8rem;"></i>
+                    </div>
+                    <h3 style="margin-bottom: 1rem; color: var(--dark);">Garansi Kepuasan</h3>
+                    <p style="color: #6B7280;">Garansi 100% uang kembali jika tidak puas</p>
+                </div>
+            </div>
         </div>
 
-        <div class="stats">
-            <div class="stat-card">
-                <div class="stat-number">7+</div>
-                <div class="stat-label">Tahun Pengalaman</div>
+        <!-- Featured Products -->
+        <div style="margin: 4rem 0;">
+            <div style="text-align: center; margin-bottom: 2rem;">
+                <h2 style="color: var(--primary); font-size: 2.5rem; margin-bottom: 1rem;">
+                    <i class="fas fa-fire"></i> Produk Unggulan
+                </h2>
+                <p style="color: #6B7280; font-size: 1.1rem; max-width: 600px; margin: 0 auto;">
+                    Produk terbaik pilihan pelanggan kami dengan kualitas premium
+                </p>
             </div>
-            <div class="stat-card">
-                <div class="stat-number">1000+</div>
-                <div class="stat-label">Pelanggan Puas</div>
+            
+            <div class="grid grid-4">
+                {featured_html or '''
+                <div class="card" style="text-align: center; padding: 3rem; grid-column: span 4;">
+                    <i class="fas fa-box-open" style="font-size: 3rem; color: #6B7280; margin-bottom: 1rem;"></i>
+                    <h3>Belum Ada Produk Unggulan</h3>
+                    <p>Silakan tambahkan produk dengan menandai sebagai "unggulan"</p>
+                </div>
+                '''}
             </div>
-            <div class="stat-card">
-                <div class="stat-number">100%</div>
-                <div class="stat-label">Ikan Segar</div>
+            
+            {featured_products and '''
+            <div style="text-align: center; margin-top: 3rem;">
+                <a href="/products" class="btn btn-primary" style="padding: 1rem 3rem; font-size: 1.1rem;">
+                    <i class="fas fa-store"></i> Lihat Semua Produk
+                </a>
+            </div>
+            ''' or ''}
+        </div>
+
+        <!-- Stats Section -->
+        <div style="margin: 4rem 0;">
+            <div class="stats">
+                <div class="stat-card" style="text-align: center;">
+                    <div class="stat-number">7+</div>
+                    <div class="stat-label">Tahun Pengalaman</div>
+                    <p style="color: #6B7280; font-size: 0.9rem; margin-top: 0.5rem;">Sejak 2017</p>
+                </div>
+                <div class="stat-card" style="text-align: center;">
+                    <div class="stat-number">1000+</div>
+                    <div class="stat-label">Pelanggan Puas</div>
+                    <p style="color: #6B7280; font-size: 0.9rem; margin-top: 0.5rem;">Seluruh Indonesia</p>
+                </div>
+                <div class="stat-card" style="text-align: center;">
+                    <div class="stat-number">100%</div>
+                    <div class="stat-label">Ikan Segar</div>
+                    <p style="color: #6B7280; font-size: 0.9rem; margin-top: 0.5rem;">Garansi kesegaran</p>
+                </div>
+                <div class="stat-card" style="text-align: center;">
+                    <div class="stat-number">24/7</div>
+                    <div class="stat-label">Layanan</div>
+                    <p style="color: #6B7280; font-size: 0.9rem; margin-top: 0.5rem;">Support WhatsApp</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Testimonials Section -->
+        <div style="margin: 4rem 0;">
+            <h2 style="text-align: center; color: var(--primary); margin-bottom: 3rem; font-size: 2.5rem;">
+                <i class="fas fa-comment-dots"></i> Testimoni Pelanggan
+            </h2>
+            
+            <div class="grid grid-3">
+                <div class="card" style="padding: 2rem;">
+                    <div style="display: flex; align-items: center; margin-bottom: 1.5rem;">
+                        <div style="width: 50px; height: 50px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; margin-right: 1rem;">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div>
+                            <h4 style="margin: 0; color: var(--dark);">Budi Santoso</h4>
+                            <p style="margin: 0; color: #6B7280; font-size: 0.9rem;">Restoran Sari Rasa</p>
+                        </div>
+                    </div>
+                    <p style="color: #6B7280; font-style: italic;">"Ikan masnya selalu segar, cocok untuk menu andalan restoran saya. Pengirimannya cepat dan tepat waktu!"</p>
+                    <div style="color: var(--warning); margin-top: 1rem;">
+                        <i class="fas fa-star"></i>
+                        <i class="fas fa-star"></i>
+                        <i class="fas fa-star"></i>
+                        <i class="fas fa-star"></i>
+                        <i class="fas fa-star"></i>
+                    </div>
+                </div>
+                
+                <div class="card" style="padding: 2rem;">
+                    <div style="display: flex; align-items: center; margin-bottom: 1.5rem;">
+                        <div style="width: 50px; height: 50px; border-radius: 50%; background: var(--success); color: white; display: flex; align-items: center; justify-content: center; margin-right: 1rem;">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div>
+                            <h4 style="margin: 0; color: var(--dark);">Siti Aminah</h4>
+                            <p style="margin: 0; color: #6B7280; font-size: 0.9rem;">Pemilik Kolam Ikan</p>
+                        </div>
+                    </div>
+                    <p style="color: #6B7280; font-style: italic;">"Bibit ikan mas dari Kang-Mas Shop pertumbuhannya cepat dan sehat. Sudah 3 tahun langganan, tidak pernah mengecewakan."</p>
+                    <div style="color: var(--warning); margin-top: 1rem;">
+                        <i class="fas fa-star"></i>
+                        <i class="fas fa-star"></i>
+                        <i class="fas fa-star"></i>
+                        <i class="fas fa-star"></i>
+                        <i class="fas fa-star-half-alt"></i>
+                    </div>
+                </div>
+                
+                <div class="card" style="padding: 2rem;">
+                    <div style="display: flex; align-items: center; margin-bottom: 1.5rem;">
+                        <div style="width: 50px; height: 50px; border-radius: 50%; background: var(--error); color: white; display: flex; align-items: center; justify-content: center; margin-right: 1rem;">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div>
+                            <h4 style="margin: 0; color: var(--dark);">Rudi Hartono</h4>
+                            <p style="margin: 0; color: #6B7280; font-size: 0.9rem;">Pengusaha Ikan</p>
+                        </div>
+                    </div>
+                    <p style="color: #6B7280; font-style: italic;">"Sistem akuntansinya sangat membantu mengelola keuangan usaha. Sekarang lebih mudah menghitung laba rugi."</p>
+                    <div style="color: var(--warning); margin-top: 1rem;">
+                        <i class="fas fa-star"></i>
+                        <i class="fas fa-star"></i>
+                        <i class="fas fa-star"></i>
+                        <i class="fas fa-star"></i>
+                        <i class="fas fa-star"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- About Section -->
+        <div class="card" style="background: linear-gradient(135deg, var(--primary) 0%, var(--ocean-deep) 100%); color: white; margin: 4rem 0; padding: 3rem;">
+            <div class="grid grid-2">
+                <div>
+                    <h2 style="color: white; margin-bottom: 1.5rem; font-size: 2.5rem;">Tentang Kami</h2>
+                    <p style="margin-bottom: 1.5rem; opacity: 0.9; font-size: 1.1rem;">
+                        Kang-Mas Shop berdiri sejak 2017 dengan komitmen memberikan ikan mas berkualitas terbaik langsung dari kolam di Magelang. 
+                        Kami mengutamakan kesegaran dan kepuasan pelanggan dalam setiap transaksi.
+                    </p>
+                    <p style="margin-bottom: 1.5rem; opacity: 0.9; font-size: 1.1rem;">
+                        Selain menjual ikan mas segar, kami juga menyediakan sistem akuntansi terintegrasi untuk membantu pengusaha ikan mengelola keuangan dengan lebih baik.
+                    </p>
+                    <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                        <a href="https://wa.me/6289654733875" target="_blank" class="btn" style="background: white; color: var(--primary);">
+                            <i class="fab fa-whatsapp"></i> WhatsApp Kami
+                        </a>
+                        <a href="/products" class="btn" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid white;">
+                            <i class="fas fa-store"></i> Belanja Sekarang
+                        </a>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: center; align-items: center;">
+                    <div style="background: rgba(255,255,255,0.1); padding: 2rem; border-radius: var(--border-radius); backdrop-filter: blur(10px);">
+                        <h3 style="color: white; margin-bottom: 1rem;"><i class="fas fa-clock"></i> Jam Operasional</h3>
+                        <ul style="list-style: none; padding: 0; margin: 0;">
+                            <li style="margin-bottom: 0.5rem; padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.1);">Senin - Jumat: 08:00 - 17:00</li>
+                            <li style="margin-bottom: 0.5rem; padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.1);">Sabtu: 08:00 - 15:00</li>
+                            <li style="padding: 0.5rem 0;">Minggu: Tutup</li>
+                        </ul>
+                        <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <p style="margin: 0; opacity: 0.9;"><i class="fas fa-phone"></i> +62 896-5473-3875</p>
+                            <p style="margin: 0; opacity: 0.9;"><i class="fas fa-map-marker-alt"></i> Magelang, Jawa Tengah</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CTA Section -->
+        <div style="text-align: center; margin: 4rem 0;">
+            <div class="card" style="background: var(--ocean-light); padding: 4rem 2rem;">
+                <h2 style="color: var(--primary); margin-bottom: 1.5rem; font-size: 2.5rem;">Siap Membeli Ikan Segar?</h2>
+                <p style="color: #6B7280; font-size: 1.1rem; max-width: 600px; margin: 0 auto 2rem;">
+                    Bergabunglah dengan ribuan pelanggan puas kami dan dapatkan ikan mas berkualitas terbaik dengan harga kompetitif.
+                </p>
+                <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                    {current_user.user_type == 'customer' and '''
+                    <a href="/products" class="btn btn-primary" style="padding: 1rem 3rem; font-size: 1.1rem;">
+                        <i class="fas fa-shopping-cart"></i> Belanja Sekarang
+                    </a>
+                    <a href="/cart" class="btn btn-success" style="padding: 1rem 3rem; font-size: 1.1rem;">
+                        <i class="fas fa-cart-arrow-down"></i> Lihat Keranjang
+                    </a>
+                    ''' or '''
+                    <a href="/seller/dashboard" class="btn btn-primary" style="padding: 1rem 3rem; font-size: 1.1rem;">
+                        <i class="fas fa-chart-line"></i> Dashboard Seller
+                    </a>
+                    <a href="/seller/accounting" class="btn btn-success" style="padding: 1rem 3rem; font-size: 1.1rem;">
+                        <i class="fas fa-calculator"></i> Sistem Akuntansi
+                    </a>
+                    '''}
+                </div>
             </div>
         </div>
         '''
@@ -5710,7 +6469,14 @@ def index():
         return base_html('Home', content)
     except Exception as e:
         print(f"Error in index route: {e}")
-        return base_html('Home', '<div class="card"><h2>Welcome to Kang-Mas Shop</h2><p>Error loading content. Please try again.</p></div>')
+        return base_html('Home', '''
+        <div class="card" style="text-align: center; padding: 4rem;">
+            <i class="fas fa-fish" style="font-size: 4rem; color: var(--primary); margin-bottom: 2rem;"></i>
+            <h2 style="color: var(--primary);">Welcome to Kang-Mas Shop</h2>
+            <p>Error loading content. Please try again.</p>
+            <a href="/" class="btn btn-primary" style="margin-top: 1rem;">Refresh Page</a>
+        </div>
+        ''')
     
 # ===== ROUTES AUTH =====
 @app.route('/register', methods=['GET', 'POST'])
@@ -7716,6 +8482,36 @@ def seller_accounting():
         flash('Terjadi error saat memuat data akuntansi.', 'error')
         return redirect('/seller/dashboard')
 
+@app.route('/api/get_closing_entries_html')
+@login_required
+@seller_required
+def get_closing_entries_html():
+    """Return HTML untuk tab Jurnal Penutup"""
+    try:
+        # Ambil HTML jurnal penutup yang sudah ada
+        closing_html = get_proper_closing_entries_html()
+        
+        # Buat button untuk create closing entries
+        button_html = '''
+        <div style="margin-bottom: 2rem;">
+            <button class="btn btn-success" onclick="createClosingEntries()" 
+                    style="padding: 1rem 2rem; font-size: 1.1rem;">
+                <i class="fas fa-calculator"></i> Buat Jurnal Penutup Otomatis
+            </button>
+            
+            <div style="margin-top: 1rem; color: #6B7280; font-size: 0.9rem;">
+                <i class="fas fa-info-circle"></i> Tombol ini akan menutup semua akun pendapatan dan beban, 
+                menghitung laba/rugi, dan memindahkannya ke akun Modal.
+            </div>
+        </div>
+        '''
+        
+        return button_html + closing_html
+        
+    except Exception as e:
+        print(f"Error getting closing entries HTML: {e}")
+        return '<div class="card"><p>Error loading closing entries</p></div>'
+
 @app.route('/api/get_transaction_template/<template_key>')
 @login_required
 @seller_required
@@ -7838,9 +8634,9 @@ def get_sales_form():
                            min="0" required placeholder="Masukkan harga jual">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Harga Beli per Unit (HPP)</label>
+                    <label class="form-label">Harga Pokok Produksi per Unit</label>
                     <input type="number" id="cost_price" name="cost_price" class="form-control"
-                           min="0" required placeholder="Masukkan harga beli">
+                           min="0" required placeholder="Masukkan harga pokok produksi">
                 </div>
             </div>
 
@@ -8205,7 +9001,7 @@ def add_sales_journal():
             'account_id': hpp_account.id,
             'debit': total_hpp,
             'credit': 0,
-            'description': f'HPP {product_name} - {quantity} unit'
+            'description': f'Harga Pokok Produksi {product_name} - {quantity} unit'
         })
 
         entries.append({
@@ -8540,17 +9336,28 @@ def add_adjustment_journal():
 @seller_required
 def create_closing_entries_route():
     try:
+        # Cek apakah sudah ada jurnal penutup di periode ini
+        recent_closing = ClosingEntry.query.filter(
+            ClosingEntry.date >= datetime.now().replace(day=1)
+        ).first()
+        
+        if recent_closing:
+            return jsonify({
+                'success': False,
+                'message': 'Jurnal penutup untuk periode ini sudah dibuat. Silakan tunggu periode berikutnya.'
+            })
+        
         closing_entry = create_closing_entries()
 
         if closing_entry:
             return jsonify({
                 'success': True,
-                'message': 'Jurnal penutup berhasil dibuat!'
+                'message': f'Jurnal penutup berhasil dibuat! Laba/Rugi: Rp {calculate_net_income():,.0f}'
             })
         else:
             return jsonify({
                 'success': False,
-                'message': 'Gagal membuat jurnal penutup'
+                'message': 'Tidak ada akun nominal yang perlu ditutup.'
             })
 
     except Exception as e:
@@ -8765,7 +9572,7 @@ def create_initial_data():
             {'code': '401', 'name': 'Pendapatan Penjualan', 'type': 'pendapatan', 'category': 'revenue', 'balance': 0},  # DARI 6.5jt MENJADI 0
 
             # Expense Accounts - Debit Balance
-            {'code': '501', 'name': 'Harga Pokok Penjualan', 'type': 'hpp', 'category': 'expense', 'balance': 0},
+            {'code': '501', 'name': 'Harga Pokok Produksi', 'type': 'hpp', 'category': 'expense', 'balance': 0},
             {'code': '502', 'name': 'Beban Gaji', 'type': 'beban_gaji', 'category': 'expense', 'balance': 0},
             {'code': '503', 'name': 'Beban Listrik dan Air', 'type': 'beban_listrik', 'category': 'expense', 'balance': 0},
             {'code': '504', 'name': 'Beban Perlengkapan', 'type': 'beban_perlengkapan', 'category': 'expense', 'balance': 0},
