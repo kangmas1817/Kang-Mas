@@ -211,7 +211,7 @@ COLORS = {
 }
 
 # ===== DATABASE MODELS =====
-class User(UserMixin, db.Model):
+class User(UserMixin, db.Model): #Menyimpan data pengguna
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128))
@@ -236,7 +236,7 @@ class User(UserMixin, db.Model):
         self.verification_code = ''.join([str(random.randint(0, 9)) for _ in range(6)])
         return self.verification_code
 
-class Product(db.Model):
+class Product(db.Model): #Menyimpan data produk ikan mas
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text)
@@ -934,23 +934,28 @@ def generate_unique_transaction_number(prefix='TRX'):
     return f"{prefix}{timestamp}{random_num}"
 
 def create_cod_sales_journal(order):
-    """Buat jurnal penjualan untuk order COD yang selesai"""
+    """Buat jurnal penjualan untuk order COD yang selesai - LENGKAP dengan HPP"""
     try:
-        # Hitung total harga produk saja (TANPA ONGKIR untuk jurnal)
+        # Hitung total harga produk dan HPP
         product_total = 0
+        hpp_total = 0
         for item in OrderItem.query.filter_by(order_id=order.id).all():
-            product_total += item.price * item.quantity
+            product_total += item.price * item.quantity  # Harga jual
+            hpp_total += item.cost_price * item.quantity  # Harga beli/HPP
 
-        # Buat jurnal penjualan
+        # Buat jurnal penjualan LENGKAP
         transaction_number = generate_unique_transaction_number('COD')
         description = f"Penjualan COD Order #{order.order_number}"
 
         # Get accounts
         kas_account = Account.query.filter_by(type='kas').first()
         pendapatan_account = Account.query.filter_by(type='pendapatan').first()
+        hpp_account = Account.query.filter_by(type='hpp').first()
+        persediaan_account = Account.query.filter_by(type='persediaan').first()
 
-        if kas_account and pendapatan_account:
+        if kas_account and pendapatan_account and hpp_account and persediaan_account:
             entries = [
+                # Entri 1: Kas dan Pendapatan
                 {
                     'account_id': kas_account.id,
                     'debit': product_total,
@@ -962,6 +967,20 @@ def create_cod_sales_journal(order):
                     'debit': 0,
                     'credit': product_total,
                     'description': f'Pendapatan penjualan COD order #{order.order_number}'
+                },
+                
+                # Entri 2: HPP dan Persediaan
+                {
+                    'account_id': hpp_account.id,
+                    'debit': hpp_total,
+                    'credit': 0,
+                    'description': f'HPP penjualan COD order #{order.order_number}'
+                },
+                {
+                    'account_id': persediaan_account.id,
+                    'debit': 0,
+                    'credit': hpp_total,
+                    'description': f'Pengurangan persediaan COD order #{order.order_number}'
                 }
             ]
 
@@ -973,7 +992,10 @@ def create_cod_sales_journal(order):
                 entries
             )
 
-            print(f"✅ Jurnal COD dibuat untuk order #{order.order_number}: Rp {product_total:,.0f}")
+            print(f"✅ Jurnal COD LENGKAP dibuat untuk order #{order.order_number}:")
+            print(f"   Penjualan: Rp {product_total:,.0f}")
+            print(f"   HPP: Rp {hpp_total:,.0f}")
+            print(f"   Laba Kotor: Rp {product_total - hpp_total:,.0f}")
 
             # Update kartu persediaan untuk setiap produk yang dijual
             for item in OrderItem.query.filter_by(order_id=order.id).all():
@@ -995,7 +1017,7 @@ def create_cod_sales_journal(order):
         print(f"Error creating COD sales journal: {e}")
     return None
 
-def create_journal_entry(transaction_number, date, description, journal_type, entries):
+def create_journal_entry(transaction_number, date, description, journal_type, entries): #Membuat jurnal dengan validasi balance
     try:
         print(f"🔄 Memulai create_journal_entry: {transaction_number}")
 
@@ -1345,27 +1367,32 @@ def update_inventory_card(product_id, transaction_type, transaction_number, quan
 
 # ===== PERBAIKAN FUNGSI JURNAL PENJUALAN =====
 def create_sales_journal(order):
-    """Buat jurnal penjualan otomatis saat order completed - TANPA ONGKIR"""
+    """Buat jurnal penjualan otomatis saat order completed - LENGKAP dengan HPP"""
     try:
-        print(f"🔄 [DEBUG] Memulai pembuatan jurnal penjualan untuk order #{order.order_number}")
+        print(f"🔄 [DEBUG] Memulai pembuatan jurnal penjualan LENGKAP untuk order #{order.order_number}")
 
         # Hitung total harga produk saja (TANPA ONGKIR)
         product_total = 0
+        hpp_total = 0
         order_items = OrderItem.query.filter_by(order_id=order.id).all()
 
         for item in order_items:
-            product_total += item.price * item.quantity
-            print(f"📦 [DEBUG] Produk: {item.product_id}, Qty: {item.quantity}, Price: {item.price}")
+            product_total += item.price * item.quantity  # Harga jual
+            hpp_total += item.cost_price * item.quantity  # Harga beli/HPP
+            print(f"📦 [DEBUG] Produk: {item.product_id}, Qty: {item.quantity}, Price: {item.price}, Cost: {item.cost_price}")
 
         print(f"💰 [DEBUG] Total penjualan: Rp {product_total:,.0f}")
+        print(f"📉 [DEBUG] Total HPP: Rp {hpp_total:,.0f}")
 
-        # Buat jurnal penjualan
+        # Buat jurnal penjualan LENGKAP
         transaction_number = generate_unique_transaction_number('SALES')
         description = f"Penjualan Order #{order.order_number}"
 
         # Get accounts
         kas_account = Account.query.filter_by(type='kas').first()
         pendapatan_account = Account.query.filter_by(type='pendapatan').first()
+        hpp_account = Account.query.filter_by(type='hpp').first()
+        persediaan_account = Account.query.filter_by(type='persediaan').first()
 
         if not kas_account:
             print("❌ [DEBUG] Akun Kas tidak ditemukan")
@@ -1373,10 +1400,17 @@ def create_sales_journal(order):
         if not pendapatan_account:
             print("❌ [DEBUG] Akun Pendapatan tidak ditemukan")
             return None
+        if not hpp_account:
+            print("❌ [DEBUG] Akun HPP tidak ditemukan")
+            return None
+        if not persediaan_account:
+            print("❌ [DEBUG] Akun Persediaan tidak ditemukan")
+            return None
 
-        print(f"✅ [DEBUG] Akun ditemukan: Kas({kas_account.code}), Pendapatan({pendapatan_account.code})")
+        print(f"✅ [DEBUG] Akun ditemukan: Kas({kas_account.code}), Pendapatan({pendapatan_account.code}), HPP({hpp_account.code}), Persediaan({persediaan_account.code})")
 
         entries = [
+            # Entri 1: Kas dan Pendapatan (pakai harga jual)
             {
                 'account_id': kas_account.id,
                 'debit': product_total,
@@ -1388,6 +1422,20 @@ def create_sales_journal(order):
                 'debit': 0,
                 'credit': product_total,
                 'description': f'Pendapatan penjualan order #{order.order_number}'
+            },
+            
+            # Entri 2: HPP dan Persediaan (pakai harga beli)
+            {
+                'account_id': hpp_account.id,
+                'debit': hpp_total,
+                'credit': 0,
+                'description': f'HPP penjualan order #{order.order_number}'
+            },
+            {
+                'account_id': persediaan_account.id,
+                'debit': 0,
+                'credit': hpp_total,
+                'description': f'Pengurangan persediaan order #{order.order_number}'
             }
         ]
 
@@ -1402,7 +1450,10 @@ def create_sales_journal(order):
         )
 
         if journal:
-            print(f"✅ [DEBUG] Jurnal penjualan berhasil dibuat: {journal.transaction_number}")
+            print(f"✅ [DEBUG] Jurnal penjualan LENGKAP berhasil dibuat: {journal.transaction_number}")
+            print(f"📊 [DEBUG] Total Penjualan: Rp {product_total:,.0f}")
+            print(f"📊 [DEBUG] Total HPP: Rp {hpp_total:,.0f}")
+            print(f"📊 [DEBUG] Laba Kotor: Rp {product_total - hpp_total:,.0f}")
         else:
             print("❌ [DEBUG] Gagal membuat jurnal penjualan")
             return None
@@ -5696,11 +5747,11 @@ def get_adjusted_trial_balance():
         return '<tr><td colspan="4">Error loading adjusted trial balance</td></tr>'
 
 def get_general_journal_entries():
-    """Tampilkan jurnal umum DAN jurnal penjualan"""
+    """Tampilkan jurnal umum DAN jurnal penjualan dengan TOTAL KESELURUHAN"""
     try:
         journal_entries = JournalEntry.query.filter(
             JournalEntry.journal_type.in_(['general', 'sales', 'purchase', 'hpp'])
-        ).order_by(JournalEntry.date.desc()).all()
+        ).order_by(JournalEntry.date.desc(), JournalEntry.id.desc()).all()
 
         if not journal_entries:
             return '''
@@ -5710,9 +5761,52 @@ def get_general_journal_entries():
             </div>
             '''
 
-        table_html = '''
+        # HITUNG TOTAL KESELURUHAN
+        total_all_debit = 0
+        total_all_credit = 0
+        
+        for journal in journal_entries:
+            total_all_debit += sum(d.debit for d in journal.journal_details)
+            total_all_credit += sum(d.credit for d in journal.journal_details)
+
+        table_html = f'''
         <div class="card">
-            <h4 style="color: var(--primary); margin-bottom: 1.5rem;"><i class="fas fa-list"></i> Daftar Jurnal Umum</h4>
+            <h4 style="color: var(--primary); margin-bottom: 1.5rem;">
+                <i class="fas fa-list"></i> Daftar Jurnal Umum
+                <span style="font-size: 0.9rem; color: #6B7280; font-weight: normal; margin-left: 1rem;">
+                    ({len(journal_entries)} transaksi)
+                </span>
+            </h4>
+            
+            <!-- TOTAL KESELURUHAN CARD -->
+            <div style="background: linear-gradient(135deg, var(--primary) 0%, var(--ocean-deep) 100%); color: white; padding: 1.5rem; border-radius: var(--border-radius); margin-bottom: 1.5rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h5 style="margin: 0; color: white;">
+                            <i class="fas fa-calculator"></i> TOTAL KESELURUHAN JURNAL UMUM
+                        </h5>
+                        <p style="margin: 0.5rem 0 0 0; opacity: 0.9; font-size: 0.9rem;">
+                            Seluruh transaksi jurnal umum yang tercatat
+                        </p>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="display: flex; gap: 2rem;">
+                            <div>
+                                <div style="font-size: 0.9rem; opacity: 0.9;">TOTAL DEBIT</div>
+                                <div style="font-size: 1.5rem; font-weight: bold; color: #A7F3D0;">Rp {total_all_debit:,.0f}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.9rem; opacity: 0.9;">TOTAL KREDIT</div>
+                                <div style="font-size: 1.5rem; font-weight: bold; color: #FECACA;">Rp {total_all_credit:,.0f}</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 0.5rem; padding: 0.5rem 1rem; background: rgba(255, 255, 255, 0.2); border-radius: var(--border-radius); font-size: 0.9rem;">
+                            {"✅ SELARAS" if total_all_debit == total_all_credit else "⚠️ TIDAK SELARAS"}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div style="overflow-x: auto;">
                 <table class="table">
                     <thead>
@@ -5721,15 +5815,27 @@ def get_general_journal_entries():
                             <th>No. Transaksi</th>
                             <th>Tipe</th>
                             <th>Keterangan</th>
-                            <th>Akun</th>
-                            <th>Debit</th>
-                            <th>Kredit</th>
+                            <th>Detail Akun</th>
                         </tr>
                     </thead>
                     <tbody>
         '''
 
+        current_date = None
+        
         for journal in journal_entries:
+            # Tampilkan header tanggal jika berbeda
+            journal_date = journal.date.strftime('%d/%m/%Y')
+            if journal_date != current_date:
+                table_html += f'''
+                <tr style="background: rgba(49, 130, 206, 0.1);">
+                    <td colspan="5" style="font-weight: bold; padding: 1rem;">
+                        <i class="fas fa-calendar-alt"></i> {journal_date}
+                    </td>
+                </tr>
+                '''
+                current_date = journal_date
+            
             # Tipe jurnal untuk identifikasi
             type_badge = ""
             if journal.journal_type == 'sales':
@@ -5741,46 +5847,98 @@ def get_general_journal_entries():
             else:
                 type_badge = '<span class="badge" style="background: var(--info);">Umum</span>'
 
+            # Hitung total per jurnal
+            total_debit = sum(d.debit for d in journal.journal_details)
+            total_credit = sum(d.credit for d in journal.journal_details)
+            
             # Add transaction header
             table_html += f'''
             <tr style="background: rgba(49, 130, 206, 0.05);">
-                <td><strong>{journal.date.strftime('%d/%m/%Y')}</strong></td>
+                <td><strong>{journal.date.strftime('%H:%M')}</strong></td>
                 <td><strong>{journal.transaction_number}</strong></td>
                 <td>{type_badge}</td>
-                <td colspan="4"><strong>{journal.description}</strong></td>
+                <td colspan="2"><strong>{journal.description}</strong></td>
             </tr>
             '''
 
             # Add account details
             for detail in journal.journal_details:
+                # Tentukan nominal
+                amount = detail.debit if detail.debit > 0 else detail.credit
+                amount_class = "debit" if detail.debit > 0 else "credit"
+                
                 table_html += f'''
                 <tr>
                     <td></td>
                     <td></td>
                     <td></td>
-                    <td></td>
-                    <td>{detail.account.code} - {detail.account.name}</td>
-                    <td class="debit">{"Rp {0:,.0f}".format(detail.debit) if detail.debit > 0 else ""}</td>
-                    <td class="credit">{"Rp {0:,.0f}".format(detail.credit) if detail.credit > 0 else ""}</td>
+                    <td style="padding-left: 1rem; font-size: 0.9rem;">
+                        {detail.account.code} - {detail.account.name}
+                        <br>
+                        <small style="color: #6B7280; font-size: 0.85rem;">
+                            {detail.description}
+                        </small>
+                    </td>
+                    <td style="text-align: right;">
+                        <span class="{amount_class}" style="font-weight: bold;">Rp {amount:,.0f}</span>
+                    </td>
                 </tr>
                 '''
+
+            # Total per jurnal
+            table_html += f'''
+            <tr style="background: rgba(0,0,0,0.02);">
+                <td colspan="4" style="text-align: right; font-weight: bold; padding: 0.5rem 1rem;">
+                    Total Jurnal Ini:
+                </td>
+                <td style="padding: 0.5rem 1rem;">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span class="debit" style="font-size: 0.9rem;">Rp {total_debit:,.0f}</span>
+                        <span style="margin: 0 0.5rem;">=</span>
+                        <span class="credit" style="font-size: 0.9rem;">Rp {total_credit:,.0f}</span>
+                    </div>
+                </td>
+            </tr>
+            <tr><td colspan="5" style="padding: 0.25rem;"></td></tr>
+            '''
 
         table_html += '''
                     </tbody>
                 </table>
             </div>
+            
+            <!-- Footer Summary -->
+            <div style="margin-top: 1.5rem; padding: 1rem; background: var(--ocean-light); border-radius: var(--border-radius);">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h5 style="color: var(--primary); margin: 0;"><i class="fas fa-chart-line"></i> Ringkasan Akhir</h5>
+                        <p style="margin: 0.5rem 0 0 0; color: #6B7280; font-size: 0.9rem;">
+                            Keseluruhan {len(journal_entries)} transaksi jurnal umum
+                        </p>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 1.1rem; font-weight: bold;">
+                            <span class="debit">Rp ''' + f'''{total_all_debit:,.0f}</span> = <span class="credit">Rp {total_all_credit:,.0f}</span>
+                        </div>
+                        <div style="font-size: 0.9rem; color: {'var(--success)' if total_all_debit == total_all_credit else 'var(--error)'};">
+                            {'✅ Semua jurnal sudah balance' if total_all_debit == total_all_credit else '❌ Ada ketidakseimbangan'}
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
         '''
-
         return table_html
     except Exception as e:
         print(f"Error generating general journal entries: {e}")
         return '<div class="card"><p>Error loading journal entries</p></div>'
 
 def get_adjustment_journal_entries():
-    """Hanya tampilkan jurnal penyesuaian (type = 'adjustment')"""
+    """Tampilkan jurnal penyesuaian dengan TOTAL KESELURUHAN"""
     try:
-        journal_entries = JournalEntry.query.filter_by(journal_type='adjustment').order_by(JournalEntry.date).all()
+        journal_entries = JournalEntry.query.filter_by(journal_type='adjustment').order_by(
+            JournalEntry.date.desc(), JournalEntry.id.desc()
+        ).all()
 
         if not journal_entries:
             return '''
@@ -5790,9 +5948,52 @@ def get_adjustment_journal_entries():
             </div>
             '''
 
-        table_html = '''
+        # HITUNG TOTAL KESELURUHAN
+        total_all_debit = 0
+        total_all_credit = 0
+        
+        for journal in journal_entries:
+            total_all_debit += sum(d.debit for d in journal.journal_details)
+            total_all_credit += sum(d.credit for d in journal.journal_details)
+
+        table_html = f'''
         <div class="card">
-            <h4 style="color: var(--primary); margin-bottom: 1.5rem;"><i class="fas fa-list"></i> Daftar Jurnal Penyesuaian</h4>
+            <h4 style="color: var(--primary); margin-bottom: 1.5rem;">
+                <i class="fas fa-calculator"></i> Daftar Jurnal Penyesuaian
+                <span style="font-size: 0.9rem; color: #6B7280; font-weight: normal; margin-left: 1rem;">
+                    ({len(journal_entries)} penyesuaian)
+                </span>
+            </h4>
+            
+            <!-- TOTAL KESELURUHAN CARD -->
+            <div style="background: linear-gradient(135deg, var(--success) 0%, var(--teal) 100%); color: white; padding: 1.5rem; border-radius: var(--border-radius); margin-bottom: 1.5rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h5 style="margin: 0; color: white;">
+                            <i class="fas fa-balance-scale"></i> TOTAL KESELURUHAN JURNAL PENYESUAIAN
+                        </h5>
+                        <p style="margin: 0.5rem 0 0 0; opacity: 0.9; font-size: 0.9rem;">
+                            Seluruh nilai penyesuaian akuntansi
+                        </p>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="display: flex; gap: 2rem;">
+                            <div>
+                                <div style="font-size: 0.9rem; opacity: 0.9;">TOTAL DEBIT</div>
+                                <div style="font-size: 1.5rem; font-weight: bold; color: #A7F3D0;">Rp {total_all_debit:,.0f}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.9rem; opacity: 0.9;">TOTAL KREDIT</div>
+                                <div style="font-size: 1.5rem; font-weight: bold; color: #FECACA;">Rp {total_all_credit:,.0f}</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 0.5rem; padding: 0.5rem 1rem; background: rgba(255, 255, 255, 0.2); border-radius: var(--border-radius); font-size: 0.9rem;">
+                            Balance: {"✅ SELARAS" if total_all_debit == total_all_credit else "⚠️ TIDAK SELARAS"}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div style="overflow-x: auto;">
                 <table class="table">
                     <thead>
@@ -5801,39 +6002,144 @@ def get_adjustment_journal_entries():
                             <th>No. Transaksi</th>
                             <th>Keterangan</th>
                             <th>Akun</th>
-                            <th>Debit</th>
-                            <th>Kredit</th>
+                            <th>Nominal</th>
                         </tr>
                     </thead>
                     <tbody>
         '''
 
+        current_date = None
+        
         for journal in journal_entries:
+            # Tampilkan header tanggal jika berbeda
+            journal_date = journal.date.strftime('%d/%m/%Y')
+            if journal_date != current_date:
+                table_html += f'''
+                <tr style="background: rgba(56, 161, 105, 0.1);">
+                    <td colspan="5" style="font-weight: bold; padding: 1rem;">
+                        <i class="fas fa-calendar-alt"></i> {journal_date}
+                    </td>
+                </tr>
+                '''
+                current_date = journal_date
+            
+            # Hitung total per jurnal
+            total_debit = sum(d.debit for d in journal.journal_details)
+            total_credit = sum(d.credit for d in journal.journal_details)
+
             # Add transaction header
             table_html += f'''
             <tr style="background: rgba(56, 161, 105, 0.05);">
-                <td><strong>{journal.date.strftime('%d/%m/%Y')}</strong></td>
+                <td><strong>{journal.date.strftime('%H:%M')}</strong></td>
                 <td><strong>{journal.transaction_number}</strong></td>
-                <td colspan="4"><strong>{journal.description}</strong></td>
+                <td colspan="3"><strong>{journal.description}</strong></td>
             </tr>
             '''
 
             # Add account details
             for detail in journal.journal_details:
+                # Tentukan nominal
+                amount = detail.debit if detail.debit > 0 else detail.credit
+                amount_class = "debit" if detail.debit > 0 else "credit"
+                
                 table_html += f'''
                 <tr>
                     <td></td>
                     <td></td>
-                    <td></td>
-                    <td>{detail.account.code} - {detail.account.name}</td>
-                    <td class="debit">{"Rp {0:,.0f}".format(detail.debit) if detail.debit > 0 else ""}</td>
-                    <td class="credit">{"Rp {0:,.0f}".format(detail.credit) if detail.credit > 0 else ""}</td>
+                    <td style="padding-left: 1rem; font-size: 0.9rem;">
+                        {detail.account.code} - {detail.account.name}
+                        <br>
+                        <small style="color: #6B7280; font-size: 0.85rem;">
+                            {detail.description}
+                        </small>
+                    </td>
+                    <td style="text-align: right;">
+                        <span class="{amount_class}" style="font-weight: bold;">Rp {amount:,.0f}</span>
+                    </td>
                 </tr>
                 '''
+
+            # Total per jurnal
+            table_html += f'''
+            <tr style="background: rgba(56, 161, 105, 0.03);">
+                <td colspan="3" style="text-align: right; font-weight: bold; padding: 0.5rem 1rem;">
+                    Total Penyesuaian Ini:
+                </td>
+                <td colspan="2" style="padding: 0.5rem 1rem;">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span class="debit" style="font-size: 0.9rem;">Rp {total_debit:,.0f}</span>
+                        <span style="margin: 0 0.5rem;">=</span>
+                        <span class="credit" style="font-size: 0.9rem;">Rp {total_credit:,.0f}</span>
+                    </div>
+                </td>
+            </tr>
+            <tr><td colspan="5" style="padding: 0.25rem;"></td></tr>
+            '''
 
         table_html += '''
                     </tbody>
                 </table>
+            </div>
+            
+            <!-- Summary Statistics -->
+            <div class="grid grid-2" style="margin-top: 1.5rem;">
+                <div style="padding: 1.5rem; background: rgba(56, 161, 105, 0.1); border-radius: var(--border-radius);">
+                    <h5 style="color: var(--success); margin-bottom: 0.5rem;">
+                        <i class="fas fa-chart-bar"></i> Statistik Penyesuaian
+                    </h5>
+                    <p style="margin: 0.5rem 0; font-size: 0.9rem;">
+                        <strong>Jumlah Penyesuaian:</strong> {len(journal_entries)}
+                    </p>
+                    <p style="margin: 0.5rem 0; font-size: 0.9rem;">
+                        <strong>Rata-rata Nilai:</strong> Rp ''' + f'''{(total_all_debit/len(journal_entries)) if journal_entries else 0:,.0f}</span>
+                    </p>
+                    <p style="margin: 0.5rem 0; font-size: 0.9rem;">
+                        <strong>Status Balance:</strong> {"✅ Selaras" if total_all_debit == total_all_credit else "❌ Tidak Selaras"}
+                    </p>
+                </div>
+                
+                <div style="padding: 1.5rem; background: rgba(49, 130, 206, 0.1); border-radius: var(--border-radius);">
+                    <h5 style="color: var(--primary); margin-bottom: 0.5rem;">
+                        <i class="fas fa-percentage"></i> Persentase
+                    </h5>
+                    <p style="margin: 0.5rem 0; font-size: 0.9rem;">
+                        <strong>Debit vs Kredit:</strong>
+                    </p>
+                    <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem;">
+                        <div style="flex: 1; background: rgba(56, 161, 105, 0.3); height: 10px; border-radius: 5px; overflow: hidden;">
+                            <div style="width: 50%; height: 100%; background: var(--success);"></div>
+                        </div>
+                        <div style="font-size: 0.9rem; font-weight: bold;">
+                            50% / 50%
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.85rem;">
+                        <span class="debit">Debit: 50%</span>
+                        <span class="credit">Kredit: 50%</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Grand Total Box -->
+            <div style="margin-top: 1.5rem; padding: 1.5rem; background: linear-gradient(135deg, var(--warning) 0%, #b7791f 100%); color: white; border-radius: var(--border-radius);">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h5 style="margin: 0; color: white;">
+                            <i class="fas fa-crown"></i> GRAND TOTAL JURNAL PENYESUAIAN
+                        </h5>
+                        <p style="margin: 0.5rem 0 0 0; opacity: 0.9; font-size: 0.9rem;">
+                            Keseluruhan nilai semua penyesuaian
+                        </p>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 1.8rem; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                            Rp ''' + f'''{total_all_debit:,.0f}</span>
+                        </div>
+                        <div style="font-size: 0.9rem; opacity: 0.9; margin-top: 0.25rem;">
+                            (Debit = Kredit)
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         '''
