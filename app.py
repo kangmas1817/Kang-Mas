@@ -10059,6 +10059,118 @@ if __name__ == '__main__':
     # Inisialisasi database
     init_database()
     
+    # ===== AUTO-RESET TRANSAKSI SETIAP START =====
+    with app.app_context():
+        try:
+            print("🔄 Memeriksa apakah perlu reset transaksi...")
+            
+            # Cek environment variable untuk menentukan reset
+            reset_option = os.environ.get('RESET_TRANSACTIONS_ON_START', 'daily').lower()
+            
+            # Tentukan apakah perlu reset berdasarkan pilihan
+            should_reset = False
+            
+            if reset_option == 'always':
+                # SELALU reset setiap kali app dimulai
+                print("📊 Mode: Reset SELALU saat app start")
+                should_reset = True
+                
+            elif reset_option == 'daily':
+                # Reset hanya sekali per hari
+                last_reset_file = base_dir / "last_reset.txt"
+                today = datetime.now().strftime('%Y-%m-%d')
+                
+                if last_reset_file.exists():
+                    with open(last_reset_file, 'r') as f:
+                        last_reset_date = f.read().strip()
+                    
+                    if last_reset_date != today:
+                        print(f"📊 Mode: Reset HARIAN (hari ini: {today}, terakhir: {last_reset_date})")
+                        should_reset = True
+                    else:
+                        print(f"📊 Mode: Reset HARIAN (sudah direset hari ini: {today})")
+                else:
+                    print(f"📊 Mode: Reset HARIAN (pertama kali reset: {today})")
+                    should_reset = True
+                    
+            elif reset_option == 'weekly':
+                # Reset setiap minggu
+                last_reset_file = base_dir / "last_reset.txt"
+                current_week = datetime.now().strftime('%Y-W%W')
+                
+                if last_reset_file.exists():
+                    with open(last_reset_file, 'r') as f:
+                        last_reset_week = f.read().strip()
+                    
+                    if last_reset_week != current_week:
+                        print(f"📊 Mode: Reset MINGGUAN (minggu ini: {current_week}, terakhir: {last_reset_week})")
+                        should_reset = True
+                    else:
+                        print(f"📊 Mode: Reset MINGGUAN (sudah direset minggu ini: {current_week})")
+                else:
+                    print(f"📊 Mode: Reset MINGGUAN (pertama kali reset: {current_week})")
+                    should_reset = True
+                    
+            elif reset_option == 'never':
+                # Tidak pernah reset otomatis
+                print("📊 Mode: TIDAK pernah reset otomatis")
+                should_reset = False
+                
+            else:
+                # Default: reset daily
+                print(f"📊 Mode: Default (daily) - Reset HARIAN")
+                should_reset = True
+            
+            # Jika perlu reset, lakukan reset transaksi
+            if should_reset:
+                print("🧹 Memulai reset transaksi...")
+                
+                # 1. Hapus semua transaksi jurnal
+                JournalEntry.query.delete()
+                JournalDetail.query.delete()
+                print("✅ Transaksi jurnal dihapus")
+                
+                # 2. Hapus transaksi inventory
+                InventoryTransaction.query.delete()
+                InventoryCard.query.delete()
+                print("✅ Transaksi inventory dihapus")
+                
+                # 3. Hapus transaksi order (tapi jangan hapus produk dan user)
+                OrderItem.query.delete()
+                Order.query.filter(Order.status != 'completed').delete()
+                print("✅ Order yang belum selesai dihapus")
+                
+                # 4. Hapus cart items
+                CartItem.query.delete()
+                print("✅ Cart items dihapus")
+                
+                # 5. Reset saldo akun ke nilai awal (TAPI jangan reset chart of accounts)
+                # Hanya reset saldo, jangan hapus akun
+                reset_account_balances()
+                print("✅ Saldo akun direset ke nilai awal")
+                
+                # 6. Update stok produk ke nilai awal
+                reset_product_stocks()
+                print("✅ Stok produk direset ke nilai awal")
+                
+                # 7. Simpan tanggal reset terakhir
+                if reset_option == 'daily':
+                    with open(base_dir / "last_reset.txt", 'w') as f:
+                        f.write(datetime.now().strftime('%Y-%m-%d'))
+                elif reset_option == 'weekly':
+                    with open(base_dir / "last_reset.txt", 'w') as f:
+                        f.write(datetime.now().strftime('%Y-W%W'))
+                
+                print("🎉 Reset transaksi selesai!")
+                
+            else:
+                print("⏭️ Tidak perlu reset transaksi saat ini")
+                
+        except Exception as e:
+            print(f"⚠️ Error saat reset transaksi: {e}")
+            import traceback
+            traceback.print_exc()
+    
     # Jalankan app
     port = int(os.environ.get('PORT', 5000))
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
