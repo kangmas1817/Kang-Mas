@@ -434,16 +434,6 @@ TRANSACTION_TEMPLATES = {
             {'account_type': 'kas', 'side': 'credit', 'description': 'Pembayaran tunai'}
         ]
     },
-    'pembelian_bibit_campur': {
-        'name': 'Pembelian Bibit Ikan (Tunai + Kredit)',
-        'description': 'Membeli bibit ikan, sebagian tunai dan sebagian kredit',
-        'entries': [
-            {'account_type': 'persediaan', 'side': 'debit', 'description': 'Pembelian bibit ikan'},
-            {'account_type': 'kas', 'side': 'credit', 'description': 'Pembayaran tunai'},
-            {'account_type': 'hutang', 'side': 'credit', 'description': 'Utang dagang'}
-        ],
-        'inventory_effect': {'type': 'bibit', 'action': 'in'}
-    },
     'pelunasan_utang_peralatan': {
         'name': 'Pelunasan Utang Peralatan',
         'description': 'Melunasi faktur pembelian peralatan dari toko',
@@ -605,20 +595,6 @@ ADJUSTMENT_TEMPLATES = {
         ],
         'inputs': [
             {'name': 'nilai_tersisa', 'label': 'Nilai Peralatan Tersisa', 'type': 'number', 'required': True}
-        ]
-    },
-    'penyusutan_kendaraan': {
-        'name': 'Penyusutan Kendaraan',
-        'description': 'Penyusutan kendaraan metode garis lurus',
-        'calculation': 'Beban Penyusutan = (Harga Perolehan - Nilai Residu) / Umur Manfaat',
-        'entries': [
-            {'account_type': 'beban_penyusutan', 'side': 'debit', 'description': 'Beban penyusutan kendaraan'},
-            {'account_type': 'akumulasi_penyusutan', 'side': 'credit', 'description': 'Akumulasi penyusutan kendaraan'}
-        ],
-        'inputs': [
-            {'name': 'harga_perolehan', 'label': 'Harga Perolehan Kendaraan', 'type': 'number', 'required': True},
-            {'name': 'nilai_residu', 'label': 'Nilai Residu', 'type': 'number', 'required': True},
-            {'name': 'umur_manfaat', 'label': 'Umur Manfaat (tahun)', 'type': 'number', 'required': True}
         ]
     },
    
@@ -20722,10 +20698,169 @@ def init_database():
             import traceback
             traceback.print_exc()
 
+# ===== FUNGSI UNTUK RESET JURNAL PENYESUAIAN =====
+def reset_accounts_after_adjustment_deletion():
+    """Reset saldo akun setelah menghapus jurnal penyesuaian"""
+    try:
+        print("🔄 Mengembalikan saldo akun ke keadaan sebelum penyesuaian...")
+        
+        # Daftar akun yang perlu direset (akun yang biasanya diadjust)
+        accounts_to_reset = [
+            'perlengkapan', 'peralatan', 'beban_perlengkapan', 
+            'beban_peralatan', 'beban_penyusutan', 'akumulasi_penyusutan',
+            'piutang', 'penyisihan_piutang', 'beban_kerugian',
+            'hutang', 'beban_listrik', 'beban_gaji'
+        ]
+        
+        # Reset saldo akun-akun ini ke nilai saldo sebelum penyesuaian
+        for account_type in accounts_to_reset:
+            account = Account.query.filter_by(type=account_type).first()
+            if account:
+                # Hitung saldo TANPA efek jurnal penyesuaian
+                # 1. Saldo awal
+                saldo_awal = get_initial_balance_for_account(account_type)
+                
+                # 2. Tambahkan efek dari jurnal umum (tanpa adjustment)
+                general_entries = JournalDetail.query.join(JournalEntry).filter(
+                    JournalDetail.account_id == account.id,
+                    JournalEntry.journal_type.in_(['general', 'sales', 'purchase', 'hpp'])
+                ).all()
+                
+                saldo = saldo_awal
+                for entry in general_entries:
+                    if account.category in ['asset', 'expense']:
+                        saldo += entry.debit - entry.credit
+                    else:
+                        saldo += entry.credit - entry.debit
+                
+                # Update saldo akun
+                old_balance = account.balance
+                account.balance = saldo
+                
+                print(f"  ✅ {account.name}: Rp {old_balance:,.0f} → Rp {saldo:,.0f}")
+        
+        db.session.commit()
+        print("✅ Saldo akun berhasil dikembalikan ke keadaan sebelum penyesuaian")
+        
+    except Exception as e:
+        print(f"Error resetting accounts: {e}")
+        db.session.rollback()
+
+def get_initial_balance_for_account(account_type):
+    """Dapatkan saldo awal untuk akun tertentu"""
+    initial_balances = {
+        'kas': 10000000,
+        'persediaan': 5000000,
+        'perlengkapan': 6500000,
+        'peralatan': 5000000,
+        'hutang': 26500000,
+        'pendapatan': 0,
+        'piutang': 0,
+        'hpp': 0,
+        'beban_gaji': 0,
+        'beban_listrik': 0,
+        'beban_perlengkapan': 0,
+        'beban_peralatan': 0,
+        'beban_penyusutan': 0,
+        'beban_transport': 0,
+        'beban_operasional': 0,
+        'beban_kerugian': 0,
+        'beban_lain': 0,
+        'modal': 0,
+        'akumulasi_penyusutan': 0,
+        'penyisihan_piutang': 0,
+        'pendapatan_diterima_dimuka': 0
+    }
+    
+    return initial_balances.get(account_type, 0)
+
 # ===== JALANKAN APLIKASI =====
 if __name__ == '__main__':
     # Inisialisasi database
     init_database()
+    
+    # ===== AUTO-RESET JURNAL PENYESUAIAN SETIAP START =====
+    with app.app_context():
+        try:
+            print("🔄 Memeriksa apakah perlu reset jurnal penyesuaian...")
+            
+            # Cek environment variable
+            reset_option = os.environ.get('RESET_ADJUSTMENTS_ON_START', 'always').lower()
+            
+            should_reset = False
+            
+            if reset_option == 'always':
+                # SELALU reset jurnal penyesuaian
+                print("📊 Mode: Reset jurnal penyesuaian SELALU saat app start")
+                should_reset = True
+                
+            elif reset_option == 'daily':
+                # Reset hanya sekali per hari
+                last_reset_file = base_dir / "last_adj_reset.txt"
+                today = datetime.now().strftime('%Y-%m-%d')
+                
+                if last_reset_file.exists():
+                    with open(last_reset_file, 'r') as f:
+                        last_reset_date = f.read().strip()
+                    
+                    if last_reset_date != today:
+                        print(f"📊 Mode: Reset jurnal penyesuaian HARIAN (hari ini: {today})")
+                        should_reset = True
+                    else:
+                        print(f"📊 Mode: Jurnal penyesuaian sudah direset hari ini: {today}")
+                else:
+                    print(f"📊 Mode: Reset jurnal penyesuaian HARIAN (pertama kali: {today})")
+                    should_reset = True
+                    
+            elif reset_option == 'never':
+                # Tidak pernah reset
+                print("📊 Mode: TIDAK reset jurnal penyesuaian otomatis")
+                should_reset = False
+                
+            else:
+                # Default: always
+                print("📊 Mode: Default - Reset jurnal penyesuaian SELALU")
+                should_reset = True
+            
+            # Jika perlu reset, lakukan reset JURNAL PENYESUAIAN SAJA
+            if should_reset:
+                print("🧹 Memulai reset jurnal penyesuaian...")
+                
+                # 1. Hapus SEMUA jurnal penyesuaian
+                adjustment_journals = JournalEntry.query.filter_by(journal_type='adjustment').all()
+                count = len(adjustment_journals)
+                
+                if count > 0:
+                    # Hapus semua journal details terlebih dahulu
+                    for journal in adjustment_journals:
+                        JournalDetail.query.filter_by(journal_id=journal.id).delete()
+                    
+                    # Hapus journal entries
+                    JournalEntry.query.filter_by(journal_type='adjustment').delete()
+                    
+                    print(f"✅ {count} jurnal penyesuaian dihapus")
+                    
+                    # 2. Reset saldo akun yang terpengaruh oleh jurnal penyesuaian
+                    # (Hapus efek dari jurnal penyesuaian, kembalikan ke saldo sebelum penyesuaian)
+                    reset_accounts_after_adjustment_deletion()
+                    
+                else:
+                    print("ℹ️ Tidak ada jurnal penyesuaian yang perlu dihapus")
+                
+                # 3. Simpan tanggal reset terakhir (jika mode daily)
+                if reset_option == 'daily':
+                    with open(base_dir / "last_adj_reset.txt", 'w') as f:
+                        f.write(datetime.now().strftime('%Y-%m-%d'))
+                
+                print("🎉 Reset jurnal penyesuaian selesai!")
+                
+            else:
+                print("⏭️ Tidak perlu reset jurnal penyesuaian saat ini")
+                
+        except Exception as e:
+            print(f"⚠️ Error saat reset jurnal penyesuaian: {e}")
+            import traceback
+            traceback.print_exc()
     
     # Jalankan app
     port = int(os.environ.get('PORT', 5000))
