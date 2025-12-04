@@ -10360,50 +10360,10 @@ def init_database():
             import traceback
             traceback.print_exc()
 
-# ===== FUNGSI SIMPLE UNTUK RESET =====
-def simple_reset_adjustments():
-    """Versi sederhana: hanya hapus jurnal penyesuaian"""
-    try:
-        count = JournalEntry.query.filter_by(journal_type='adjustment').count()
-        if count > 0:
-            # Delete in correct order to avoid foreign key constraint
-            # First delete JournalDetails
-            adjustments = JournalEntry.query.filter_by(journal_type='adjustment').all()
-            for adj in adjustments:
-                JournalDetail.query.filter_by(journal_id=adj.id).delete()
-            
-            # Then delete JournalEntries
-            JournalEntry.query.filter_by(journal_type='adjustment').delete()
-            db.session.commit()
-            print(f"✅ {count} jurnal penyesuaian dihapus")
-        return count
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        db.session.rollback()
-        return 0
-
 # ===== JALANKAN APLIKASI =====
 if __name__ == '__main__':
     # Inisialisasi database
     init_database()
-    
-    # ===== RESET JURNAL PENYESUAIAN =====
-    with app.app_context():
-        try:
-            print("🔄 Reset jurnal penyesuaian saat startup...")
-            
-            # Pilihan reset (always, daily, never)
-            reset_mode = os.environ.get('AUTO_RESET_ADJUSTMENTS', 'always')
-            
-            if reset_mode == 'never':
-                print("⏭️ Skip reset jurnal penyesuaian (mode: never)")
-            else:
-                deleted_count = simple_reset_adjustments()
-                if deleted_count == 0:
-                    print("ℹ️ Tidak ada jurnal penyesuaian yang dihapus")
-                    
-        except Exception as e:
-            print(f"⚠️ Error during reset: {e}")
     
     # Jalankan app
     port = int(os.environ.get('PORT', 5000))
