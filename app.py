@@ -515,6 +515,14 @@ TRANSACTION_TEMPLATES = {
             {'account_type': 'piutang', 'side': 'credit', 'description': 'Piutang dilunasi'}
         ]
     },
+    'biaya_reparasi_kendaraan': {
+        'name': 'Biaya Reparasi Kendaraan',
+        'description': 'Mengeluarkan biaya reparasi kendaraan operasional',
+        'entries': [
+            {'account_type': 'beban_lain', 'side': 'debit', 'description': 'Biaya reparasi kendaraan'},
+            {'account_type': 'kas', 'side': 'credit', 'description': 'Pembayaran tunai'}
+        ]
+    },
 
     'kerugian_bibit_mati': {
         'name': 'Kerugian Bibit Ikan Mati',
@@ -523,14 +531,10 @@ TRANSACTION_TEMPLATES = {
             {'account_type': 'beban_kerugian', 'side': 'debit', 'description': 'Beban kerugian bibit mati'},
             {'account_type': 'persediaan', 'side': 'credit', 'description': 'Pengurangan persediaan bibit'}
         ],
-        'inventory_effect': {'type': 'bibit', 'action': 'out'}
-    },
-    'biaya_reparasi_kendaraan': {
-        'name': 'Biaya Reparasi Kendaraan',
-        'description': 'Mengeluarkan biaya reparasi kendaraan operasional',
-        'entries': [
-            {'account_type': 'beban_lain', 'side': 'debit', 'description': 'Biaya reparasi kendaraan'},
-            {'account_type': 'kas', 'side': 'credit', 'description': 'Pembayaran tunai'}
+        'inventory_effect': {'type': 'bibit', 'action': 'out'},
+        'inputs': [  # TAMBAHKAN INPUT QUANTITY
+            {'name': 'quantity', 'label': 'Jumlah Bibit yang Mati (ekor)', 'type': 'number', 'required': True},
+            {'name': 'unit_cost', 'label': 'Harga Cost per Unit', 'type': 'number', 'required': True, 'default': 1000}
         ]
     },
 
@@ -541,8 +545,13 @@ TRANSACTION_TEMPLATES = {
             {'account_type': 'beban_kerugian', 'side': 'debit', 'description': 'Kerugian hibah bibit'},
             {'account_type': 'persediaan', 'side': 'credit', 'description': 'Pengurangan persediaan bibit'}
         ],
-        'inventory_effect': {'type': 'bibit', 'action': 'out'}
+        'inventory_effect': {'type': 'bibit', 'action': 'out'},
+        'inputs': [  # TAMBAHKAN INPUT QUANTITY
+            {'name': 'quantity', 'label': 'Jumlah Bibit yang Diberikan (ekor)', 'type': 'number', 'required': True},
+            {'name': 'unit_cost', 'label': 'Harga Cost per Unit', 'type': 'number', 'required': True, 'default': 1000}
+        ]
     },
+
     'kerugian_bibit_mati_lanjutan': {
         'name': 'Kerugian Bibit Mati Lanjutan',
         'description': 'Bibit mati secara alami di kolam',
@@ -550,7 +559,11 @@ TRANSACTION_TEMPLATES = {
             {'account_type': 'beban_kerugian', 'side': 'debit', 'description': 'Beban kerugian bibit mati'},
             {'account_type': 'persediaan', 'side': 'credit', 'description': 'Pengurangan persediaan bibit'}
         ],
-        'inventory_effect': {'type': 'bibit', 'action': 'out'}
+        'inventory_effect': {'type': 'bibit', 'action': 'out'},
+        'inputs': [  # TAMBAHKAN INPUT QUANTITY
+            {'name': 'quantity', 'label': 'Jumlah Bibit yang Mati (ekor)', 'type': 'number', 'required': True},
+            {'name': 'unit_cost', 'label': 'Harga Cost per Unit', 'type': 'number', 'required': True, 'default': 1000}
+        ]
     }
 }
 
@@ -1045,7 +1058,7 @@ def create_journal_entry(transaction_number, date, description, journal_type, en
         traceback.print_exc()
         raise e
 
-def create_journal_from_template(template_key, date, amounts):
+def create_journal_from_template(template_key, date, amounts, inputs=None):
     """Membuat jurnal dari template dengan amount yang diberikan dan update kartu persediaan - DIPERBAIKI"""
     try:
         template = TRANSACTION_TEMPLATES[template_key]
@@ -1061,9 +1074,11 @@ def create_journal_from_template(template_key, date, amounts):
 
         # Hitung total untuk transaksi yang melibatkan persediaan
         total_persediaan = 0
+        quantity = 0  # Untuk inventory effect
 
         print(f"📝 Membuat jurnal dari template: {template_key}")
         print(f" Amounts: {amounts}")
+        print(f" Inputs: {inputs}")
 
         for template_entry in template['entries']:
             account_type = template_entry['account_type']
@@ -1079,9 +1094,20 @@ def create_journal_from_template(template_key, date, amounts):
             else:
                 amount = amounts.get(account_type, 0)
 
+            # Jika ada input quantity, gunakan itu untuk hitung amount
+            if inputs and 'quantity' in inputs and 'unit_cost' in inputs:
+                if account_type == 'persediaan' and template_entry['side'] == 'credit':
+                    quantity = inputs.get('quantity', 0)
+                    unit_cost = inputs.get('unit_cost', 1000)
+                    amount = quantity * unit_cost
+                    print(f"📦 Menggunakan input quantity: {quantity} x {unit_cost} = {amount}")
+
             # Kumpulkan informasi untuk kartu persediaan
-            if account_type == 'persediaan' and template_entry['side'] == 'debit':
-                total_persediaan += amount  # Pembelian/penambahan
+            if account_type == 'persediaan':
+                if template_entry['side'] == 'debit':
+                    total_persediaan += amount  # Pembelian/penambahan
+                elif template_entry['side'] == 'credit':
+                    total_persediaan -= amount  # Pengurangan/penjualan/kerugian
 
             if account_type in accounts_map:
                 entry = {
@@ -1107,13 +1133,13 @@ def create_journal_from_template(template_key, date, amounts):
             entries
         )
 
-        # PERBAIKAN: Panggil update inventory dengan parameter yang benar
-        if 'inventory_effect' in template:
+        # PERBAIKAN: Update inventory dengan quantity dari inputs
+        if 'inventory_effect' in template and inputs:
             print(f"🔄 Memanggil update_inventory_from_journal untuk {template_key}")
-            print(f"📦 Total persediaan: {total_persediaan}")
-            update_inventory_from_journal(journal, template, amounts, total_persediaan)
+            print(f"📦 Quantity: {quantity}, Total persediaan: {total_persediaan}")
+            update_inventory_from_journal(journal, template, inputs, quantity)
         else:
-            print("ℹ️ Template tidak punya inventory effect")
+            print("ℹ️ Template tidak punya inventory effect atau inputs")
 
         return journal
 
@@ -1124,8 +1150,8 @@ def create_journal_from_template(template_key, date, amounts):
         return None
 
 # ===== FUNGSI UPDATE INVENTORY DARI JURNAL =====
-def update_inventory_from_journal(journal, template, amounts, total_amount):
-    """Update kartu persediaan berdasarkan jurnal template"""
+def update_inventory_from_journal(journal, template, inputs, quantity):
+    """Update kartu persediaan berdasarkan jurnal template dengan quantity dari inputs"""
     try:
         inventory_effect = template['inventory_effect']
         product_type = inventory_effect['type']  # 'bibit' atau 'ikan_konsumsi'
@@ -1135,51 +1161,24 @@ def update_inventory_from_journal(journal, template, amounts, total_amount):
         if product_type == 'bibit':
             product_name = "Bibit Ikan Mas"
             category = 'bibit'
+            unit_cost = inputs.get('unit_cost', 1000)
         elif product_type == 'ikan_konsumsi':
             product_name = "Ikan Mas Konsumsi"
             category = 'konsumsi'
+            unit_cost = inputs.get('unit_cost', 13500)
         else:
             return
 
         # Cari produk berdasarkan nama dan kategori
         product = Product.query.filter_by(name=product_name, category=category).first()
         if not product:
-            # Buat produk baru jika tidak ada
-            seller_id = User.query.filter_by(user_type='seller').first().id
-            product = Product(
-                name=product_name,
-                description=f"{product_name} - Auto created from journal",
-                price=2000 if product_type == 'bibit' else 30000,
-                cost_price=1000,
-                stock=0,
-                seller_id=seller_id,
-                category=category
-            )
-            db.session.add(product)
-            db.session.flush()
-            print(f"✅ Produk baru dibuat: {product_name}")
+            print(f"❌ Produk {product_name} tidak ditemukan")
+            return
 
-        # Hitung quantity berdasarkan total amount dan harga cost
-        quantity = int(total_amount / 1000)  # Harga cost tetap Rp 1,000
+        print(f"📦 Processing inventory update: {product_name}, Quantity: {quantity}, Action: {action}")
 
-        if action == 'in':
-            # Update stok produk - MASUK
-            product.stock += quantity
-            print(f"✅ Stok {product.name} bertambah {quantity} menjadi {product.stock}")
-
-            # Buat transaksi inventory
-            create_inventory_transaction(
-                product_id=product.id,
-                date=journal.date,
-                description=f"{journal.description}",
-                transaction_type='pembelian',
-                quantity_in=quantity,
-                quantity_out=0,
-                unit_price=1000
-            )
-
-        elif action == 'out':
-            # Update stok produk - KELUAR
+        if action == 'out':
+            # Update stok produk - KELUAR (kerugian)
             if product.stock >= quantity:
                 product.stock -= quantity
                 print(f"✅ Stok {product.name} berkurang {quantity} menjadi {product.stock}")
@@ -1189,10 +1188,10 @@ def update_inventory_from_journal(journal, template, amounts, total_amount):
                     product_id=product.id,
                     date=journal.date,
                     description=f"{journal.description}",
-                    transaction_type='penjualan',
+                    transaction_type='penyesuaian',
                     quantity_in=0,
                     quantity_out=quantity,
-                    unit_price=1000
+                    unit_price=unit_cost
                 )
             else:
                 print(f"⚠️ Stok tidak mencukupi untuk {product.name}. Stok: {product.stock}, Butuh: {quantity}")
@@ -5163,15 +5162,34 @@ Mohon dipersiapkan pesanannya ya. Terima kasih! 😊`;
             const data = {{
                 template_key: formData.get('template_key'),
                 date: formData.get('date'),
-                amounts: {{}}
+                amounts: {{}},
+                inputs: {{}}  // Tambah inputs
             }};
 
-            // PERBAIKAN: Ambil nilai langsung tanpa parsing formatting
+            // Collect amounts from form
             document.querySelectorAll('[id^=\"amount_\"]').forEach(input => {{
                 const accountType = input.id.replace('amount_', '');
-                // Langsung ambil nilai numerik
                 data.amounts[accountType] = parseInt(input.value) || 0;
             }});
+
+            // Collect inputs (quantity, unit_cost, dll)
+            document.querySelectorAll('[id^=\"input_\"]').forEach(input => {{
+                const inputName = input.id.replace('input_', '');
+                data.inputs[inputName] = parseInt(input.value) || 0;
+            }});
+
+            // Validasi untuk template kerugian
+            const templateKey = data.template_key;
+            if (templateKey.includes('kerugian') || templateKey.includes('hibah')) {{
+                if (!data.inputs.quantity || data.inputs.quantity <= 0) {{
+                    showNotification('❌ Harap isi jumlah bibit yang mati/diberikan!', 'error');
+                    return;
+                }}
+                if (!data.inputs.unit_cost || data.inputs.unit_cost <= 0) {{
+                    showNotification('❌ Harap isi harga cost per unit!', 'error');
+                    return;
+                }}
+            }}
 
             fetch('/seller/add_template_journal', {{
                 method: 'POST',
@@ -8820,9 +8838,25 @@ def get_transaction_template(template_key):
                 <label class="form-label">Keterangan</label>
                 <input type="text" name="description" class="form-control" value="{template['description']}" required>
             </div>
-
-            <h4 style="margin: 1.5rem 0 1rem 0; color: var(--primary);">Detail Akun:</h4>
         '''
+
+        # Tampilkan input fields jika ada
+        if 'inputs' in template:
+            form_html += '<h4 style="margin: 1.5rem 0 1rem 0; color: var(--primary);">Detail Input:</h4>'
+            
+            for input_field in template['inputs']:
+                default_value = input_field.get('default', '')
+                form_html += f'''
+                <div class="form-group">
+                    <label class="form-label">{input_field['label']}</label>
+                    <input type="number" id="input_{input_field['name']}" name="{input_field['name']}"
+                           class="form-control" step="1" min="0" {'required' if input_field['required'] else ''}
+                           value="{default_value}"
+                           placeholder="Masukkan {input_field['label'].lower()}">
+                </div>
+                '''
+
+        form_html += '<h4 style="margin: 1.5rem 0 1rem 0; color: var(--primary);">Detail Akun:</h4>'
 
         # Counter untuk handle duplicate account types
         account_counters = {}
@@ -8857,6 +8891,50 @@ def get_transaction_template(template_key):
                 <i class="fas fa-save"></i> Simpan Jurnal
             </button>
         </form>
+
+        <script>
+        // Auto-calculate amounts based on inputs for kerugian templates
+        function calculateKerugianAmounts() {
+            const templateKey = document.querySelector('input[name="template_key"]').value;
+            
+            if (templateKey.includes('kerugian') || templateKey.includes('hibah')) {
+                const quantityInput = document.getElementById('input_quantity');
+                const unitCostInput = document.getElementById('input_unit_cost');
+                const persediaanInput = document.getElementById('amount_persediaan');
+                
+                if (quantityInput && unitCostInput && persediaanInput) {
+                    const quantity = parseInt(quantityInput.value) || 0;
+                    const unitCost = parseInt(unitCostInput.value) || 1000;
+                    const totalAmount = quantity * unitCost;
+                    
+                    persediaanInput.value = totalAmount;
+                    
+                    // Auto-fill beban_kerugian dengan jumlah yang sama
+                    const bebanKerugianInput = document.getElementById('amount_beban_kerugian') || 
+                                              document.getElementById('amount_beban_kerugian_1');
+                    if (bebanKerugianInput) {
+                        bebanKerugianInput.value = totalAmount;
+                    }
+                }
+            }
+        }
+
+        // Add event listeners to input fields
+        document.addEventListener('DOMContentLoaded', function() {
+            const quantityInput = document.getElementById('input_quantity');
+            const unitCostInput = document.getElementById('input_unit_cost');
+            
+            if (quantityInput) {
+                quantityInput.addEventListener('input', calculateKerugianAmounts);
+            }
+            if (unitCostInput) {
+                unitCostInput.addEventListener('input', calculateKerugianAmounts);
+            }
+            
+            // Calculate on page load
+            setTimeout(calculateKerugianAmounts, 100);
+        });
+        </script>
         '''
 
         return jsonify({'success': True, 'form_html': form_html})
@@ -9570,17 +9648,15 @@ def add_template_journal():
         template_key = data['template_key']
         date = datetime.strptime(data['date'], '%Y-%m-%d')
         amounts = data['amounts']
+        inputs = data.get('inputs', {})  # Ambil inputs dari request
 
         if template_key not in TRANSACTION_TEMPLATES:
             return jsonify({'success': False, 'message': 'Template tidak ditemukan'})
 
-        # Create journal from template
-        journal = create_journal_from_template(template_key, date, amounts)
+        # Create journal from template dengan inputs
+        journal = create_journal_from_template(template_key, date, amounts, inputs)
 
         if journal:
-            # HAPUS BARIS INI - tidak perlu panggil fungsi dobel
-            # update_inventory_from_purchase_journal(journal, template_key, amounts)
-
             return jsonify({'success': True, 'message': 'Jurnal berhasil disimpan'})
         else:
             return jsonify({'success': False, 'message': 'Gagal membuat jurnal'})
