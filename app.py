@@ -30,61 +30,49 @@ from dotenv import load_dotenv  # Pastikan ini diimpor
 # ===== INISIALISASI APLIKASI =====
 app = Flask(__name__)
 
-base_dir = Path(__file__).parent
-db_path = base_dir / "kangmas_shop.db"
-
-# ==== PERBAIKAN DATABASE ====
-# Jika DATABASE_URI tidak ada, gunakan SQLite
-if not os.getenv('DATABASE_URI'):
-    os.environ['DATABASE_URI'] = f'sqlite:///{db_path}'
-    print(f"✅ Database SQLite: {db_path}")
-
-## ===== DATABASE CONFIGURATION FOR RENDER =====
-# ===== DATABASE CONFIGURATION FOR RENDER =====
+# ===== DATABASE CONFIGURATION FOR SUPABASE =====
 import os
+from urllib.parse import urlparse
 
-# Konfigurasi database untuk Render
-DATABASE_URL = os.environ.get('DATABASE_URL')
+# Hardcode Supabase connection string untuk psycopg3
+DATABASE_URL = "postgresql+psycopg://postgres:TugasSiaKangMas@db.lwbauezkfxryqdbtdjfq.supabase.co:5432/postgres"
 
-if DATABASE_URL:
-    print("✅ DATABASE_URL terdeteksi dari environment")
-    
-    # Konversi URL untuk menggunakan psycopg3 (psycopg[binary]) driver
-    # psycopg3 menggunakan prefix "postgresql+psycopg://"
-    if DATABASE_URL.startswith('postgres://'):
-        DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql+psycopg://', 1)
-    elif DATABASE_URL.startswith('postgresql://'):
-        DATABASE_URL = DATABASE_URL.replace('postgresql://', 'postgresql+psycopg://', 1)
-    
-    app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
-    print("✅ Menggunakan PostgreSQL dengan driver psycopg3 (psycopg[binary])")
-    
-else:
-    # Untuk development lokal
-    base_dir = Path(__file__).parent
-    db_path = base_dir / "kangmas_shop.db"
-    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
-    print(f"✅ Development: Menggunakan SQLite di {db_path}")
+print(f"✅ Menggunakan Supabase PostgreSQL dengan psycopg3")
+print(f"📊 Database host: db.lwbauezkfxryqdbtdjfq.supabase.co")
+
+# Set database URI dengan prefix yang benar untuk psycopg3
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 
 # Secret Key
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'kang-mas-secret-2025')
+app.config['SECRET_KEY'] = 'kang-mas-secret-2025-supabase'  # Ganti dengan secret key yang kuat
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Configuration untuk Supabase dengan psycopg3
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_recycle': 300,
     'pool_pre_ping': True,
-    'pool_size': 10,  # Tambah untuk PostgreSQL
-    'max_overflow': 20,  # Tambah untuk PostgreSQL
-    'pool_timeout': 30  # Tambah untuk PostgreSQL
+    'pool_size': 5,  # Supabase free tier maks 20 connections
+    'max_overflow': 10,
+    'pool_timeout': 30,
+    'connect_args': {
+        'connect_timeout': 10,
+        'keepalives': 1,
+        'keepalives_idle': 30,
+        'keepalives_interval': 10,
+        'keepalives_count': 5,
+        'sslmode': 'require'  # Supabase membutuhkan SSL
+    }
 }
 
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
-app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'static/uploads')
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-# Ensure upload folders exist
-os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'products'), exist_ok=True)
-os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'logos'), exist_ok=True)
-os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'assets'), exist_ok=True)
+# Hapus bagian SQLite fallback yang lama
+# Hapus baris-baris ini jika ada:
+# base_dir = Path(__file__).parent
+# db_path = base_dir / "kangmas_shop.db"
+# app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
@@ -10178,195 +10166,228 @@ def create_initial_journals():
 
 # ===== FUNGSI CREATE_INITIAL_DATA =====
 def create_initial_data():
-    # Create seller account
-    seller = User.query.filter_by(email='kang.mas1817@gmail.com').first()
-    if not seller:
-        seller = User(
-            email='kang.mas1817@gmail.com',
-            full_name='Pemilik Kang-Mas Shop',
-            user_type='seller',
-            phone='+6289654733875',
-            address='Magelang, Jawa Tengah',
-            avatar='👑',
-            email_verified=True
-        )
-        seller.set_password('TugasSiaKangMas')
-        db.session.add(seller)
-        print("✅ Seller account created successfully")
-
-    # Create demo customer
-    customer = User.query.filter_by(email='customer@example.com').first()
-    if not customer:
-        customer = User(
-            email='customer@example.com',
-            full_name='Budi Santoso',
-            user_type='customer',
-            phone='087654321098',
-            address='Jl. Contoh No. 123, Jakarta',
-            avatar='👨',
-            email_verified=True
-        )
-        customer.set_password('customer123')
-        db.session.add(customer)
-        print("✅ Customer account created successfully")
-
-    # Create accounts dengan saldo awal YANG DIPERBAIKI
-    if Account.query.count() == 0:
-        accounts = [
-            # Asset Accounts - Debit Balance
-            {'code': '101', 'name': 'Kas', 'type': 'kas', 'category': 'asset', 'balance': 10000000},
-            {'code': '102', 'name': 'Piutang Usaha', 'type': 'piutang', 'category': 'asset', 'balance': 0},
-            {'code': '103', 'name': 'Persediaan Barang Dagang', 'type': 'persediaan', 'category': 'asset', 'balance': 5000000},
-            {'code': '104', 'name': 'Perlengkapan Toko', 'type': 'perlengkapan', 'category': 'asset', 'balance': 6500000},
-            {'code': '105', 'name': 'Peralatan Toko', 'type': 'peralatan', 'category': 'asset', 'balance': 5000000},
-
-            # AKUN BARU UNTUK TEMPLATE
-            {'code': '106', 'name': 'Akumulasi Penyusutan', 'type': 'akumulasi_penyusutan', 'category': 'asset', 'balance': 0},
-            {'code': '107', 'name': 'Penyisihan Piutang', 'type': 'penyisihan_piutang', 'category': 'asset', 'balance': 0},
-            {'code': '108', 'name': 'Pendapatan Diterima Dimuka', 'type': 'pendapatan_diterima_dimuka', 'category': 'liability', 'balance': 0},
-            {'code': '301', 'name': 'Modal Pemilik', 'type': 'modal', 'category': 'equity', 'balance': 0},
-
-            # Liability Accounts - Credit Balance - DIPERBAIKI
-            {'code': '201', 'name': 'Utang Dagang', 'type': 'hutang', 'category': 'liability', 'balance': 26500000},  # DARI 20jt MENJADI 26.5jt
-
-            # Revenue Accounts - Credit Balance - DIPERBAIKI
-            {'code': '401', 'name': 'Pendapatan Penjualan', 'type': 'pendapatan', 'category': 'revenue', 'balance': 0},  # DARI 6.5jt MENJADI 0
-
-            # Expense Accounts - Debit Balance
-            {'code': '501', 'name': 'Harga Pokok Produksi', 'type': 'hpp', 'category': 'expense', 'balance': 0},
-            {'code': '502', 'name': 'Beban Gaji', 'type': 'beban_gaji', 'category': 'expense', 'balance': 0},
-            {'code': '503', 'name': 'Beban Listrik dan Air', 'type': 'beban_listrik', 'category': 'expense', 'balance': 0},
-            {'code': '504', 'name': 'Beban Perlengkapan', 'type': 'beban_perlengkapan', 'category': 'expense', 'balance': 0},
-            {'code': '505', 'name': 'Beban Penyusutan', 'type': 'beban_penyusutan', 'category': 'expense', 'balance': 0},
-            {'code': '506', 'name': 'Beban Transportasi', 'type': 'beban_transport', 'category': 'expense', 'balance': 0},
-            {'code': '507', 'name': 'Beban Operasional', 'type': 'beban_operasional', 'category': 'expense', 'balance': 0},
-            {'code': '520', 'name': 'Beban Kerugian', 'type': 'beban_kerugian', 'category': 'expense', 'balance': 0},
-            {'code': '529', 'name': 'Beban Lain-lain', 'type': 'beban_lain', 'category': 'expense', 'balance': 0},
-        ]
-
-        for acc_data in accounts:
-            account = Account(**acc_data)
-            db.session.add(account)
-        print("✅ Accounts created successfully with corrected balances")
-
-    # Create products
-    # Create products dengan stock sesuai saldo awal
-    if Product.query.count() == 0:
-        seller_id = User.query.filter_by(user_type='seller').first().id
-        products = [
-            {
-                'name': 'Bibit Ikan Mas',
-                'description': 'Bibit ikan mas segar ukuran 8cm, kualitas terbaik untuk pembesaran',
-                'price': 2000,
-                'cost_price': 1000,  # Harga cost untuk HPP
-                'stock': 2975,  # DIPERBAIKI: 2975 ekor sesuai saldo awal
-                'size_cm': 8,
-                'seller_id': seller_id,
-                'category': 'bibit',
-                'image_url': '/static/uploads/products/bibit_ikan_mas.jpg'
-            },
-            {
-                'name': 'Ikan Mas Konsumsi',
-                'description': 'Ikan mas segar siap konsumsi, berat 1kg',
-                'price': 20000,
-                'cost_price': 13500,  # Harga cost untuk HPP
-                'stock': 150,  # DIPERBAIKI: 150 ekor sesuai saldo awal
-                'weight_kg': 1,
-                'seller_id': seller_id,
-                'category': 'konsumsi',
-                'is_featured': True,
-                'image_url': '/static/uploads/products/ikan_mas_konsumsi.jpg'
-            }
-        ]
-
-        for prod_data in products:
-            product = Product(**prod_data)
-            db.session.add(product)
-            db.session.flush()  # Untuk dapat product.id
-
-            # Buat entry awal di kartu persediaan dengan harga cost yang benar
-            if product.name == 'Bibit Ikan Mas':
-                unit_cost = 1000
-                total_value = 2975 * 1000  # 2,975,000
-            else:  # Ikan Mas Konsumsi
-                unit_cost = 13500
-                total_value = 150 * 13500  # 2,025,000
-
-            # Buat transaksi inventory untuk saldo awal
-            inventory_transaction = InventoryTransaction(
-                product_id=product.id,
-                date=datetime.now(),
-                description='SALDO AWAL - Persediaan awal periode',
-                transaction_type='saldo_awal',
-                quantity_in=product.stock,
-                quantity_out=0,
-                unit_price=unit_cost,
-                total_amount=total_value,
-                balance_quantity=product.stock,
-                balance_unit_price=unit_cost,
-                balance_total=total_value
+    """Create initial data untuk Supabase"""
+    try:
+        # Create seller account
+        seller = User.query.filter_by(email='kang.mas1817@gmail.com').first()
+        if not seller:
+            seller = User(
+                email='kang.mas1817@gmail.com',
+                full_name='Pemilik Kang-Mas Shop',
+                user_type='seller',
+                phone='+6289654733875',
+                address='Magelang, Jawa Tengah',
+                avatar='👑',
+                email_verified=True
             )
-            db.session.add(inventory_transaction)
+            seller.set_password('TugasSiaKangMas')
+            db.session.add(seller)
+            print("✅ Seller account created successfully")
 
-            # Juga buat di InventoryCard untuk kompatibilitas
-            inventory_card = InventoryCard(
-                product_id=product.id,
-                date=datetime.now(),
-                transaction_type='saldo_awal',
-                transaction_number='SALDO_AWAL',
-                quantity_in=product.stock,
-                quantity_out=0,
-                unit_cost=unit_cost,
-                total_cost=total_value,
-                balance_quantity=product.stock,
-                balance_value=total_value
+        # Create demo customer
+        customer = User.query.filter_by(email='customer@example.com').first()
+        if not customer:
+            customer = User(
+                email='customer@example.com',
+                full_name='Budi Santoso',
+                user_type='customer',
+                phone='087654321098',
+                address='Jl. Contoh No. 123, Jakarta',
+                avatar='👨',
+                email_verified=True
             )
-            db.session.add(inventory_card)
+            customer.set_password('customer123')
+            db.session.add(customer)
+            print("✅ Customer account created successfully")
 
-            print(f"✅ Kartu persediaan saldo awal dibuat untuk {product.name}: {product.stock} unit @ Rp {unit_cost:,} = Rp {total_value:,}")
+        # Create accounts
+        if Account.query.count() == 0:
+            accounts = [
+                # Asset Accounts - Debit Balance
+                {'code': '101', 'name': 'Kas', 'type': 'kas', 'category': 'asset', 'balance': 10000000},
+                {'code': '102', 'name': 'Piutang Usaha', 'type': 'piutang', 'category': 'asset', 'balance': 0},
+                {'code': '103', 'name': 'Persediaan Barang Dagang', 'type': 'persediaan', 'category': 'asset', 'balance': 5000000},
+                {'code': '104', 'name': 'Perlengkapan Toko', 'type': 'perlengkapan', 'category': 'asset', 'balance': 6500000},
+                {'code': '105', 'name': 'Peralatan Toko', 'type': 'peralatan', 'category': 'asset', 'balance': 5000000},
+                
+                # AKUN BARU UNTUK TEMPLATE
+                {'code': '106', 'name': 'Akumulasi Penyusutan', 'type': 'akumulasi_penyusutan', 'category': 'asset', 'balance': 0},
+                {'code': '107', 'name': 'Penyisihan Piutang', 'type': 'penyisihan_piutang', 'category': 'asset', 'balance': 0},
+                {'code': '108', 'name': 'Pendapatan Diterima Dimuka', 'type': 'pendapatan_diterima_dimuka', 'category': 'liability', 'balance': 0},
+                {'code': '301', 'name': 'Modal Pemilik', 'type': 'modal', 'category': 'equity', 'balance': 0},
+                
+                # Liability Accounts - Credit Balance
+                {'code': '201', 'name': 'Utang Dagang', 'type': 'hutang', 'category': 'liability', 'balance': 26500000},
+                
+                # Revenue Accounts - Credit Balance
+                {'code': '401', 'name': 'Pendapatan Penjualan', 'type': 'pendapatan', 'category': 'revenue', 'balance': 0},
+                
+                # Expense Accounts - Debit Balance
+                {'code': '501', 'name': 'Harga Pokok Produksi', 'type': 'hpp', 'category': 'expense', 'balance': 0},
+                {'code': '502', 'name': 'Beban Gaji', 'type': 'beban_gaji', 'category': 'expense', 'balance': 0},
+                {'code': '503', 'name': 'Beban Listrik dan Air', 'type': 'beban_listrik', 'category': 'expense', 'balance': 0},
+                {'code': '504', 'name': 'Beban Perlengkapan', 'type': 'beban_perlengkapan', 'category': 'expense', 'balance': 0},
+                {'code': '505', 'name': 'Beban Penyusutan', 'type': 'beban_penyusutan', 'category': 'expense', 'balance': 0},
+                {'code': '506', 'name': 'Beban Transportasi', 'type': 'beban_transport', 'category': 'expense', 'balance': 0},
+                {'code': '507', 'name': 'Beban Operasional', 'type': 'beban_operasional', 'category': 'expense', 'balance': 0},
+                {'code': '520', 'name': 'Beban Kerugian', 'type': 'beban_kerugian', 'category': 'expense', 'balance': 0},
+                {'code': '529', 'name': 'Beban Lain-lain', 'type': 'beban_lain', 'category': 'expense', 'balance': 0},
+            ]
 
-        # Hitung total persediaan untuk verifikasi
-        total_persediaan = (2975 * 1000) + (150 * 13500)
-        print(f"📊 Total Saldo Persediaan: Rp {total_persediaan:,} (Bibit: 2,975,000 + Konsumsi: 2,025,000)")
+            for acc_data in accounts:
+                account = Account(**acc_data)
+                db.session.add(account)
+            print("✅ Accounts created successfully")
 
-    # Commit semua perubahan
-    db.session.commit()
+        # Create products
+        if Product.query.count() == 0:
+            seller_id = User.query.filter_by(user_type='seller').first().id
+            products = [
+                {
+                    'name': 'Bibit Ikan Mas',
+                    'description': 'Bibit ikan mas segar ukuran 8cm, kualitas terbaik untuk pembesaran',
+                    'price': 2000,
+                    'cost_price': 1000,
+                    'stock': 2975,
+                    'size_cm': 8,
+                    'seller_id': seller_id,
+                    'category': 'bibit',
+                    'image_url': '/static/uploads/products/bibit_ikan_mas.jpg'
+                },
+                {
+                    'name': 'Ikan Mas Konsumsi',
+                    'description': 'Ikan mas segar siap konsumsi, berat 1kg',
+                    'price': 20000,
+                    'cost_price': 13500,
+                    'stock': 150,
+                    'weight_kg': 1,
+                    'seller_id': seller_id,
+                    'category': 'konsumsi',
+                    'is_featured': True,
+                    'image_url': '/static/uploads/products/ikan_mas_konsumsi.jpg'
+                }
+            ]
 
-    # Buat jurnal umum setelah data initial dibuat
-    create_initial_journals()
+            for prod_data in products:
+                product = Product(**prod_data)
+                db.session.add(product)
+            print("✅ Products created successfully")
 
-# ===== INISIALISASI DATABASE =====
-def init_database():
-    """Initialize database and create initial data"""
+        # Commit semua perubahan
+        db.session.commit()
+        print("✅ All initial data committed to Supabase!")
+        
+    except Exception as e:
+        print(f"❌ Error creating initial data: {e}")
+        db.session.rollback()
+        raise e
+
+# ===== FUNGSI SETUP SUPABASE SCHEMA =====
+def setup_supabase_schema():
+    """Setup database schema di Supabase"""
     with app.app_context():
         try:
             # Buat semua tabel
             db.create_all()
-            print("✅ Database tables created successfully!")
+            print("✅ Tables created successfully in Supabase!")
             
             # Cek apakah sudah ada data
             if User.query.count() == 0:
                 create_initial_data()
+                print("✅ Initial data created successfully in Supabase!")
+            else:
+                print("✅ Database already has data")
+                
+        except Exception as e:
+            print(f"❌ Error setting up Supabase schema: {e}")
+            import traceback
+            traceback.print_exc()
+
+# ===== ROUTE SETUP DATABASE (HANYA UNTUK DEVELOPMENT) =====
+@app.route('/admin/setup-database')
+@login_required
+@seller_required
+def setup_database():
+    """Route untuk setup database di Supabase"""
+    try:
+        setup_supabase_schema()
+        return jsonify({'success': True, 'message': 'Database setup completed!'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+# ===== INISIALISASI DATABASE =====
+def init_database():
+    """Initialize database and create initial data untuk Supabase"""
+    with app.app_context():
+        try:
+            print("🔧 Initializing database...")
+            
+            # Deteksi tipe database
+            db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+            
+            if 'supabase' in db_uri or 'postgresql' in db_uri:
+                print("🚀 Detected: Supabase PostgreSQL")
+            elif 'sqlite' in db_uri:
+                print("💻 Detected: SQLite (Local Development)")
+            else:
+                print("❓ Unknown database type")
+            
+            # Buat semua tabel
+            db.create_all()
+            print("✅ Tables created successfully!")
+            
+            # Cek apakah sudah ada data dasar
+            if User.query.count() == 0:
+                print("📦 Creating initial data...")
+                create_initial_data()
                 print("✅ Initial data created successfully!")
             else:
-                print("✅ Database already has data, skipping initial data creation")
+                # Hitung data yang ada
+                user_count = User.query.count()
+                product_count = Product.query.count()
+                account_count = Account.query.count()
+                print(f"📊 Database stats:")
+                print(f"   👥 Users: {user_count}")
+                print(f"   🐟 Products: {product_count}")
+                print(f"   📈 Accounts: {account_count}")
                 
-            print("🔐 Seller Login: kang.mas1817@gmail.com / TugasSiaKangMas")
-            print("🔐 Customer Login: customer@example.com / customer123")
+            print("\n" + "="*50)
+            print("🔐 LOGIN CREDENTIALS:")
+            print("="*50)
+            print("👑 Seller: kang.mas1817@gmail.com / TugasSiaKangMas")
+            print("👤 Customer: customer@example.com / customer123")
+            print("="*50)
             
+            # Tambahkan info Supabase jika terdeteksi
+            if 'supabase' in db_uri:
+                print("\n🌐 Supabase Connection Info:")
+                print(f"   Database: {db_uri.split('@')[1].split('/')[0] if '@' in db_uri else 'N/A'}")
+                print("   Dashboard: https://supabase.com/dashboard")
+                
         except Exception as e:
             print(f"❌ Error initializing database: {e}")
             import traceback
             traceback.print_exc()
+            raise  # Re-raise error agar aplikasi tidak berjalan jika DB error
 
 # ===== JALANKAN APLIKASI =====
 if __name__ == '__main__':
     # Inisialisasi database
-    init_database()
+    print("="*60)
+    print("🚀 STARTING KANG-MAS SHOP APPLICATION")
+    print("="*60)
+    
+    success = init_database()
+    
+    if not success:
+        print("❌ Database initialization failed. Exiting...")
+        exit(1)
     
     # Jalankan app
     port = int(os.environ.get('PORT', 5000))
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     
-    print(f"🚀 Server starting on port {port} (debug: {debug_mode})")
+    print(f"🌐 Server starting on port {port} (debug: {debug_mode})")
+    print("="*60)
+    
     app.run(host='0.0.0.0', port=port, debug=debug_mode)
