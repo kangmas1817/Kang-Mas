@@ -1675,6 +1675,9 @@ def get_inventory_card_html(product_id=None):
                 </div>
                 '''
 
+        # 🔐 Pastikan product_id bertipe INT (bukan string)
+        product_id = int(product_id)
+
         product = Product.query.get(product_id)
         if not product:
             return '<div class="card"><p>Produk tidak ditemukan</p></div>'
@@ -9000,7 +9003,7 @@ def seller_inventory_card():
             return base_html('Kartu Persediaan', content)
 
         # Product selection
-        selected_product_id = request.args.get('product_id')
+        selected_product_id = request.args.get('product_id', type=int)
         if selected_product_id:
             selected_product = Product.query.get(selected_product_id)
         else:
