@@ -292,7 +292,7 @@ class Account(db.Model):
 
 class JournalEntry(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    transaction_number = db.Column(db.String(20), unique=True, nullable=False)
+    transaction_number = db.Column(db.String(50), unique=True, nullable=False)
     date = db.Column(db.DateTime, nullable=False)
     description = db.Column(db.Text, nullable=False)
     journal_type = db.Column(db.String(50), nullable=False)
@@ -7603,16 +7603,31 @@ def cart():
                     total += subtotal
 
                     cart_html += f'''
-                    <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div class="card" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                         <div style="flex: 1;">
                             <h4>{product.name}</h4>
-                            <p>Rp {product.price:,.0f} x {item.quantity}</p>
+                            <p>Harga: Rp {product.price:,.0f}</p>
                             <p>Subtotal: Rp {subtotal:,.0f}</p>
                         </div>
-                        <div>
-                            <form action="/remove_from_cart/{item.id}" method="POST" style="display: inline;">
-                                <button type="submit" class="btn btn-danger">Hapus</button>
-                            </form>
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <button class="btn btn-sm btn-warning" onclick="updateCartQuantity({item.id}, -1)">
+                                    <i class="fas fa-minus"></i>
+                                </button>
+                                <input type="number" id="quantity_{item.id}" 
+                                       value="{item.quantity}" min="1" max="{product.stock}"
+                                       style="width: 60px; text-align: center; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"
+                                       onchange="updateCartQuantityInput({item.id})">
+                                <button class="btn btn-sm btn-success" onclick="updateCartQuantity({item.id}, 1)">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                                <span style="font-size: 0.9rem; color: #666;">
+                                    Stok: {product.stock}
+                                </span>
+                            </div>
+                            <button class="btn btn-danger" onclick="removeFromCart({item.id})">
+                                <i class="fas fa-trash"></i> Hapus
+                            </button>
                         </div>
                     </div>
                     '''
@@ -7622,9 +7637,14 @@ def cart():
             {cart_html}
             <div class="card">
                 <h3>Total: Rp {total:,.0f}</h3>
-                <button class="btn btn-success" onclick="checkout()">
-                    <i class="fas fa-credit-card"></i> Checkout Sekarang
-                </button>
+                <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                    <button class="btn btn-primary" onclick="updateAllQuantities()">
+                        <i class="fas fa-sync-alt"></i> Update Semua Quantity
+                    </button>
+                    <button class="btn btn-success" onclick="checkout()">
+                        <i class="fas fa-credit-card"></i> Checkout Sekarang
+                    </button>
+                </div>
             </div>
             '''
 
@@ -11182,5 +11202,3 @@ if __name__ == '__main__':
     
     print(f"🚀 Server starting on port {port} (debug: {debug_mode})")
     app.run(host='0.0.0.0', port=port, debug=debug_mode)
-
-
