@@ -1985,13 +1985,19 @@ def update_inventory_card(product_id, transaction_type, transaction_number, quan
         return None
 
 def get_balance_sheet():
-    """Generate balance sheet HTML yang seimbang"""
+    """Generate balance sheet HTML yang seimbang dengan akumulasi penyusutan sebagai pengurang aset"""
     try:
-        # Get asset accounts (positive balances only)
-        asset_accounts = Account.query.filter_by(category='asset').filter(Account.balance > 0).all()
-        total_assets = sum(acc.balance for acc in asset_accounts)
-
-        # Get liability accounts (positive balances only)
+        # Get asset accounts
+        asset_accounts = Account.query.filter_by(category='asset').order_by(Account.code).all()
+        
+        # Get akumulasi penyusutan (kode 106) - PERBAIKAN: ini SALDO NEGATIF di database karena mengurangi aset
+        akumulasi_penyusutan_account = Account.query.filter_by(code='106', type='akumulasi_penyusutan').first()
+        
+        # PERBAIKAN PENTING: Akumulasi penyusutan di database HARUS NEGATIF karena mengurangi aset
+        # Tapi di tampilan kita ambil nilai absolutnya untuk ditampilkan sebagai pengurang
+        akumulasi_penyusutan_saldo = akumulasi_penyusutan_account.balance if akumulasi_penyusutan_account else 0
+        
+        # Get liability accounts
         liability_accounts = Account.query.filter_by(category='liability').filter(Account.balance > 0).all()
         total_liabilities = sum(acc.balance for acc in liability_accounts)
 
@@ -2007,13 +2013,48 @@ def get_balance_sheet():
 
         # Calculate total equity (modal + laba/rugi)
         total_equity = sum(acc.balance for acc in equity_accounts) + net_income
-
-        assets_html = ""
+        
+        # ===== PERBAIKAN UTAMA: Hitung total aset dengan benar =====
+        # 1. Jumlahkan SEMUA akun aset (termasuk akumulasi penyusutan yang saldonya NEGATIF)
+        total_aset_bersih = sum(acc.balance for acc in asset_accounts)
+        
+        # 2. Hitung aset kotor (tanpa akumulasi penyusutan) untuk display
+        total_aset_kotor = 0
         for acc in asset_accounts:
+            if acc.type != 'akumulasi_penyusutan':
+                total_aset_kotor += acc.balance
+        
+        # 3. Nilai akumulasi penyusutan untuk display (nilai absolut dari saldo negatif)
+        akumulasi_penyusutan_display = abs(akumulasi_penyusutan_saldo) if akumulasi_penyusutan_saldo < 0 else 0
+
+        # Generate HTML untuk aset dengan format yang benar
+        assets_html = ""
+        aset_tanpa_penyusutan = []
+        
+        for acc in asset_accounts:
+            # Tampilkan semua akun aset kecuali akumulasi penyusutan
+            if acc.type != 'akumulasi_penyusutan':
+                aset_tanpa_penyusutan.append(acc)
+        
+        # Tampilkan aset-aset utama
+        for acc in aset_tanpa_penyusutan:
             assets_html += f'''
             <tr>
-                <td>{acc.name}</td>
+                <td style="padding-left: 1rem;">{acc.code} - {acc.name}</td>
                 <td class="debit">Rp {acc.balance:,.0f}</td>
+            </tr>
+            '''
+        
+        # Tambahkan baris akumulasi penyusutan dengan indentasi HANYA JIKA ADA NILAI
+        if akumulasi_penyusutan_display > 0:
+            assets_html += f'''
+            <tr>
+                <td style="padding-left: 2rem; font-style: italic; color: #666;">
+                    106 - Akumulasi Penyusutan
+                </td>
+                <td class="credit" style="font-style: italic; color: var(--error);">
+                    (Rp {akumulasi_penyusutan_display:,.0f})
+                </td>
             </tr>
             '''
 
@@ -2021,7 +2062,7 @@ def get_balance_sheet():
         for acc in liability_accounts:
             liabilities_html += f'''
             <tr>
-                <td>{acc.name}</td>
+                <td>{acc.code} - {acc.name}</td>
                 <td class="credit">Rp {acc.balance:,.0f}</td>
             </tr>
             '''
@@ -2031,7 +2072,7 @@ def get_balance_sheet():
             if acc.balance != 0:  # Hanya tampilkan equity yang ada saldonya
                 equity_html += f'''
                 <tr>
-                    <td>{acc.name}</td>
+                    <td>{acc.code} - {acc.name}</td>
                     <td class="credit">Rp {acc.balance:,.0f}</td>
                 </tr>
                 '''
@@ -2040,12 +2081,22 @@ def get_balance_sheet():
         if net_income != 0:
             equity_html += f'''
             <tr>
-                <td>{"Laba Bersih" if net_income > 0 else "Rugi Bersih"}</td>
-                <td class="credit">Rp {abs(net_income):,.0f}</td>
+                <td style="padding-left: 1rem; font-weight: bold;">{"Laba" if net_income > 0 else "Rugi"} Bersih Periode</td>
+                <td class="{"credit" if net_income > 0 else "debit"}" style="font-weight: bold;">Rp {abs(net_income):,.0f}</td>
             </tr>
             '''
 
-        is_balanced = total_assets == (total_liabilities + total_equity)
+        # PERBAIKAN: Verifikasi perhitungan
+        print(f"🔍 [BALANCE SHEET DEBUG]")
+        print(f"   Total Aset Bersih (database): Rp {total_aset_bersih:,.0f}")
+        print(f"   Total Aset Kotor: Rp {total_aset_kotor:,.0f}")
+        print(f"   Akumulasi Penyusutan (display): Rp {akumulasi_penyusutan_display:,.0f}")
+        print(f"   Akumulasi Penyusutan (saldo db): Rp {akumulasi_penyusutan_saldo:,.0f}")
+        print(f"   Total Kewajiban: Rp {total_liabilities:,.0f}")
+        print(f"   Total Ekuitas: Rp {total_equity:,.0f}")
+        print(f"   Kewajiban + Ekuitas: Rp {total_liabilities + total_equity:,.0f}")
+
+        is_balanced = abs(total_aset_bersih - (total_liabilities + total_equity)) < 1  # Toleransi 1 rupiah
 
         return f'''
         <div class="grid grid-2">
@@ -2054,12 +2105,22 @@ def get_balance_sheet():
                 <table class="table">
                     <tbody>
                         {assets_html}
-                        <tr style="font-weight: bold; border-top: 2px solid var(--primary);">
-                            <td>Total Aset</td>
-                            <td class="debit">Rp {total_assets:,.0f}</td>
+                        <tr style="font-weight: bold; border-top: 2px solid var(--primary); background: rgba(56, 161, 105, 0.1);">
+                            <td>TOTAL ASET (Bersih)</td>
+                            <td class="debit"><strong>Rp {total_aset_bersih:,.0f}</strong></td>
                         </tr>
                     </tbody>
                 </table>
+                
+                <!-- Informasi perhitungan aset -->
+                <div style="margin-top: 1rem; padding: 1rem; background: rgba(56, 161, 105, 0.05); border-radius: var(--border-radius); font-size: 0.9rem;">
+                    <p style="margin: 0; color: var(--success);">
+                        <strong>Perhitungan Aset Bersih:</strong><br>
+                        Total Aset Kotor: Rp {total_aset_kotor:,.0f}<br>
+                        {f'Akumulasi Penyusutan: (Rp {akumulasi_penyusutan_display:,.0f})' if akumulasi_penyusutan_display > 0 else 'Akumulasi Penyusutan: Rp 0'}<br>
+                        <strong>Aset Bersih: Rp {total_aset_bersih:,.0f}</strong>
+                    </p>
+                </div>
             </div>
 
             <div>
@@ -2068,17 +2129,17 @@ def get_balance_sheet():
                     <tbody>
                         {liabilities_html}
                         <tr style="font-weight: bold;">
-                            <td>Total Kewajiban</td>
+                            <td>TOTAL KEWAJIBAN</td>
                             <td class="credit">Rp {total_liabilities:,.0f}</td>
                         </tr>
                         {equity_html}
                         <tr style="font-weight: bold; border-top: 2px solid var(--primary);">
-                            <td>Total Ekuitas</td>
+                            <td>TOTAL EKUITAS</td>
                             <td class="credit">Rp {total_equity:,.0f}</td>
                         </tr>
                         <tr style="font-weight: bold; border-top: 2px solid var(--primary); background: rgba(49, 130, 206, 0.1);">
-                            <td>Total Kewajiban & Ekuitas</td>
-                            <td class="credit">Rp {total_liabilities + total_equity:,.0f}</td>
+                            <td>TOTAL KEWAJIBAN & EKUITAS</td>
+                            <td class="credit"><strong>Rp {total_liabilities + total_equity:,.0f}</strong></td>
                         </tr>
                     </tbody>
                 </table>
@@ -2089,14 +2150,17 @@ def get_balance_sheet():
             <h4 style="color: {'var(--success)' if is_balanced else 'var(--error)'};">
                 {'✅ NERACA SEIMBANG' if is_balanced else '❌ NERACA TIDAK SEIMBANG'}
             </h4>
-            <p><strong>Aset = Kewajiban + Ekuitas</strong></p>
-            <p>Rp {total_assets:,.0f} = Rp {total_liabilities:,.0f} + Rp {total_equity:,.0f}</p>
-            <p>Rp {total_assets:,.0f} = Rp {total_liabilities + total_equity:,.0f}</p>
+            <p><strong>Aset Bersih = Kewajiban + Ekuitas</strong></p>
+            <p>Rp {total_aset_bersih:,.0f} = Rp {total_liabilities:,.0f} + Rp {total_equity:,.0f}</p>
+            <p>Rp {total_aset_bersih:,.0f} = Rp {total_liabilities + total_equity:,.0f}</p>
+            {f'<p style="color: var(--error); margin-top: 0.5rem;">Selisih: Rp {abs(total_aset_bersih - (total_liabilities + total_equity)):,.0f}</p>' if not is_balanced else ''}
         </div>
         '''
     except Exception as e:
-        print(f"Error generating balance sheet: {e}")
-        return f'<p>Error loading balance sheet: {e}</p>'
+        print(f"❌ Error generating balance sheet: {e}")
+        import traceback
+        traceback.print_exc()
+        return f'<div class="card"><p>Error loading balance sheet: {e}</p></div>'
 
 def get_initial_balances():
     """Mengambil saldo awal dari database - OTOMATIS"""
@@ -9818,6 +9882,7 @@ def edit_product(product_id):
         return redirect('/seller/products')
 
 # ===== ROUTES AKUNTANSI =====
+
 @app.route('/seller/accounting')
 @login_required
 @seller_required
