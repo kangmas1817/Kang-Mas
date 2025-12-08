@@ -297,7 +297,11 @@ class JournalEntry(db.Model):
     description = db.Column(db.Text, nullable=False)
     journal_type = db.Column(db.String(50), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    journal_details = db.relationship('JournalDetail', backref='journal_entry', lazy=True)
+    journal_details = db.relationship(
+        'JournalDetail',
+        backref='journal',
+        cascade='all, delete-orphan'
+    )
 
 class JournalDetail(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -1536,122 +1540,123 @@ def get_ledger_data():
         # Dapatkan semua akun
         all_accounts = Account.query.order_by(Account.code).all()
 
+        if not all_accounts:
+            return '<div class="card"><p>Belum ada akun yang dibuat.</p></div>'
+
         ledger_html = ""
 
         for account in all_accounts:
-            # ✅✅✅ BENAR: Hitung saldo awal REAL dari database
-            
-            # Langkah 1: Mulai dari saldo awal di database
-            saldo_awal_murni = account.balance  # Ini dari form edit saldo awal
-            
-            # Langkah 2: KURANGI efek dari SEMUA transaksi jurnal
-            # (karena account.balance sudah termasuk semua jurnal)
-            semua_jurnal = JournalDetail.query.filter_by(account_id=account.id).all()
-            
-            total_efek_jurnal = 0
-            for detail in semua_jurnal:
-                if account.category in ['asset', 'expense']:
-                    # Asset/Expense: Debit (+), Credit (-)
-                    total_efek_jurnal += detail.debit - detail.credit
-                else:
-                    # Liability/Equity/Revenue: Credit (+), Debit (-)
-                    total_efek_jurnal += detail.credit - detail.debit
-            
-            # Saldo awal murni = Saldo sekarang - efek semua jurnal
-            opening_balance = saldo_awal_murni - total_efek_jurnal
-            
-            # Debug info
-            print(f"📊 [LEDGER] {account.code} - {account.name}:")
-            print(f"   Saldo database: {saldo_awal_murni:,.0f}")
-            print(f"   Total efek jurnal: {total_efek_jurnal:,.0f}")
-            print(f"   Saldo awal murni: {opening_balance:,.0f}")
+            try:
+                # Hitung saldo awal dengan cara yang benar
+                opening_balance = account.balance  # Mulai dari saldo database
+                
+                # KURANGI efek dari semua jurnal yang sudah ada
+                semua_jurnal = JournalDetail.query.filter_by(account_id=account.id).all()
+                
+                for detail in semua_jurnal:
+                    if account.category in ['asset', 'expense']:
+                        # Asset/Expense: Debit (+), Credit (-)
+                        opening_balance -= (detail.debit - detail.credit)
+                    else:
+                        # Liability/Equity/Revenue: Credit (+), Debit (-)
+                        opening_balance -= (detail.credit - detail.debit)
+                
+                # Debug info
+                print(f"📊 [LEDGER] {account.code} - {account.name}:")
+                print(f"   Saldo database: {account.balance:,.0f}")
+                print(f"   Saldo awal murni: {opening_balance:,.0f}")
+                print(f"   Jumlah jurnal: {len(semua_jurnal)}")
 
-            # Hanya tampilkan akun yang punya saldo atau transaksi
-            journal_details = JournalDetail.query.join(JournalEntry).filter(
-                JournalDetail.account_id == account.id,
-                JournalEntry.journal_type.in_(['general', 'sales', 'purchase', 'hpp', 'adjustment'])
-            ).order_by(JournalEntry.date, JournalDetail.id).all()
+                # Hanya tampilkan akun yang punya saldo atau transaksi
+                journal_details = JournalDetail.query.join(JournalEntry).filter(
+                    JournalDetail.account_id == account.id,
+                    JournalEntry.journal_type.in_(['general', 'sales', 'purchase', 'hpp', 'adjustment'])
+                ).order_by(JournalEntry.date, JournalDetail.id).all()
 
-            if abs(opening_balance) > 0.01 or journal_details:  # Toleransi kecil
-                account_html = f'''
-                <div class="card" style="margin-bottom: 2rem;">
-                    <h4 style="color: var(--primary); margin-bottom: 1rem;">
-                        {account.code} - {account.name}
-                    </h4>
-                '''
-
-                if journal_details:
-                    account_html += '''
-                    <div style="overflow-x: auto;">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Tanggal</th>
-                                    <th>Keterangan</th>
-                                    <th>Debit</th>
-                                    <th>Kredit</th>
-                                    <th>Saldo</th>
-                                </tr>
-                            </thead>
-                            <tbody>
+                if abs(opening_balance) > 0.01 or journal_details:
+                    account_html = f'''
+                    <div class="card" style="margin-bottom: 2rem;">
+                        <h4 style="color: var(--primary); margin-bottom: 1rem;">
+                            {account.code} - {account.name}
+                        </h4>
                     '''
 
-                    running_balance = opening_balance
+                    if journal_details:
+                        account_html += '''
+                        <div style="overflow-x: auto;">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Tanggal</th>
+                                        <th>Keterangan</th>
+                                        <th>Debit</th>
+                                        <th>Kredit</th>
+                                        <th>Saldo</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                        '''
 
-                    # Tambahkan baris saldo awal
-                    account_html += f'''
-                    <tr style="background: rgba(49, 130, 206, 0.05);">
-                        <td>Saldo Awal</td>
-                        <td><strong>Saldo Awal Periode</strong></td>
-                        <td></td>
-                        <td></td>
-                        <td class="{'debit' if running_balance >= 0 else 'credit'}">Rp {abs(running_balance):,.0f}</td>
-                    </tr>
-                    '''
+                        running_balance = opening_balance
 
-                    for detail in journal_details:
-                        journal = detail.journal_entry
-
-                        # Update running balance sesuai kategori akun
-                        if account.category in ['asset', 'expense']:
-                            running_balance += detail.debit - detail.credit
-                        else:
-                            running_balance += detail.credit - detail.debit
-
+                        # Tambahkan baris saldo awal
                         account_html += f'''
-                        <tr>
-                            <td>{journal.date.strftime('%d/%m/%Y')}</td>
-                            <td>{journal.description}</td>
-                            <td class="debit">{"Rp {0:,.0f}".format(detail.debit) if detail.debit > 0 else ""}</td>
-                            <td class="credit">{"Rp {0:,.0f}".format(detail.credit) if detail.credit > 0 else ""}</td>
+                        <tr style="background: rgba(49, 130, 206, 0.05);">
+                            <td>Saldo Awal</td>
+                            <td><strong>Saldo Awal Periode</strong></td>
+                            <td></td>
+                            <td></td>
                             <td class="{'debit' if running_balance >= 0 else 'credit'}">Rp {abs(running_balance):,.0f}</td>
                         </tr>
                         '''
 
-                    account_html += '''
-                            </tbody>
-                        </table>
-                    </div>
-                    '''
-                else:
-                    # Jika tidak ada transaksi, tampilkan saldo awal saja
-                    if abs(opening_balance) > 0.01:
-                        account_html += f'''
-                        <p>Saldo Awal: <span class="{'debit' if opening_balance >= 0 else 'credit'}">
-                            Rp {abs(opening_balance):,.0f}
-                        </span></p>
-                        '''
+                        for detail in journal_details:
+                            journal = detail.journal
 
-                account_html += '</div>'
-                ledger_html += account_html
+                            # Update running balance sesuai kategori akun
+                            if account.category in ['asset', 'expense']:
+                                running_balance += detail.debit - detail.credit
+                            else:
+                                running_balance += detail.credit - detail.debit
+
+                            account_html += f'''
+                            <tr>
+                                <td>{journal.date.strftime('%d/%m/%Y')}</td>
+                                <td>{journal.description}</td>
+                                <td class="debit">{"Rp {0:,.0f}".format(detail.debit) if detail.debit > 0 else ""}</td>
+                                <td class="credit">{"Rp {0:,.0f}".format(detail.credit) if detail.credit > 0 else ""}</td>
+                                <td class="{'debit' if running_balance >= 0 else 'credit'}">Rp {abs(running_balance):,.0f}</td>
+                            </tr>
+                            '''
+
+                        account_html += '''
+                                </tbody>
+                            </table>
+                        </div>
+                        '''
+                    else:
+                        # Jika tidak ada transaksi, tampilkan saldo awal saja
+                        if abs(opening_balance) > 0.01:
+                            account_html += f'''
+                            <p>Saldo Awal: <span class="{'debit' if opening_balance >= 0 else 'credit'}">
+                                Rp {abs(opening_balance):,.0f}
+                            </span></p>
+                            '''
+
+                    account_html += '</div>'
+                    ledger_html += account_html
+
+            except Exception as e:
+                print(f"❌ Error processing account {account.code}: {e}")
+                continue
 
         return ledger_html if ledger_html else '<div class="card"><p>Belum ada transaksi untuk ditampilkan di buku besar.</p></div>'
 
     except Exception as e:
-        print(f"Error generating ledger data: {e}")
+        print(f"❌ Error generating ledger data: {e}")
         import traceback
         traceback.print_exc()
-        return '<div class="card"><p>Error loading ledger data.</p></div>'
+        return '<div class="card"><p style="color: var(--error);">Error loading ledger data: ' + str(e) + '</p></div>'
 
 # ===== FUNGSI KARTU PERSEDIAAN BARU =====
 def get_inventory_card_html(product_id=None):
@@ -2112,15 +2117,7 @@ def get_balance_sheet():
                     </tbody>
                 </table>
                 
-                <!-- Informasi perhitungan aset -->
-                <div style="margin-top: 1rem; padding: 1rem; background: rgba(56, 161, 105, 0.05); border-radius: var(--border-radius); font-size: 0.9rem;">
-                    <p style="margin: 0; color: var(--success);">
-                        <strong>Perhitungan Aset Bersih:</strong><br>
-                        Total Aset Kotor: Rp {total_aset_kotor:,.0f}<br>
-                        {f'Akumulasi Penyusutan: (Rp {akumulasi_penyusutan_display:,.0f})' if akumulasi_penyusutan_display > 0 else 'Akumulasi Penyusutan: Rp 0'}<br>
-                        <strong>Aset Bersih: Rp {total_aset_bersih:,.0f}</strong>
-                    </p>
-                </div>
+   
             </div>
 
             <div>
@@ -2144,16 +2141,6 @@ def get_balance_sheet():
                     </tbody>
                 </table>
             </div>
-        </div>
-
-        <div style="margin-top: 2rem; padding: 1.5rem; background: {'rgba(56, 161, 105, 0.1)' if is_balanced else 'rgba(229, 62, 62, 0.1)'}; border-radius: var(--border-radius);">
-            <h4 style="color: {'var(--success)' if is_balanced else 'var(--error)'};">
-                {'✅ NERACA SEIMBANG' if is_balanced else '❌ NERACA TIDAK SEIMBANG'}
-            </h4>
-            <p><strong>Aset Bersih = Kewajiban + Ekuitas</strong></p>
-            <p>Rp {total_aset_bersih:,.0f} = Rp {total_liabilities:,.0f} + Rp {total_equity:,.0f}</p>
-            <p>Rp {total_aset_bersih:,.0f} = Rp {total_liabilities + total_equity:,.0f}</p>
-            {f'<p style="color: var(--error); margin-top: 0.5rem;">Selisih: Rp {abs(total_aset_bersih - (total_liabilities + total_equity)):,.0f}</p>' if not is_balanced else ''}
         </div>
         '''
     except Exception as e:
@@ -2270,12 +2257,6 @@ def get_saldo_awal_html():
         # Tambahkan info tentang akun nominal
         saldo_html += f'''
         <tr style="background: rgba(156, 163, 175, 0.1);">
-            <td colspan="4" style="text-align: center; color: #6B7280; font-size: 0.9rem; padding: 0.5rem;">
-                <i class="fas fa-info-circle"></i> 
-                <strong>Catatan:</strong> 
-                Saldo awal murni dari database, TANPA efek jurnal umum & penyesuaian. 
-                Pendapatan & Beban tidak memiliki saldo awal (selalu 0).
-            </td>
         </tr>
         '''
 
@@ -2341,16 +2322,6 @@ def get_equity_change_statement():
                 </tr>
             </tbody>
         </table>
-
-        <div style="margin-top: 1rem; padding: 1rem; background: rgba(49, 130, 206, 0.05); border-radius: var(--border-radius);">
-            <h5 style="color: var(--primary); margin-bottom: 0.5rem;">Keterangan:</h5>
-            <p style="margin: 0.25rem 0; font-size: 0.9rem;">
-                <strong>Modal Akhir = Modal Awal + Laba Bersih (atau - Rugi Bersih)</strong>
-            </p>
-            <p style="margin: 0.25rem 0; font-size: 0.9rem;">
-                {ending_equity_formatted} = {beginning_equity_formatted} {'+' if net_income >= 0 else ''} {net_income_formatted}
-            </p>
-        </div>
         '''
     except Exception as e:
         print(f"Error generating equity change statement: {e}")
@@ -3193,41 +3164,6 @@ def get_post_closing_trial_balance():
                 <i class="fas fa-balance-scale"></i> Neraca Saldo Setelah Penutupan (Post-Closing Trial Balance)
             </h4>
             
-            <div style="background: var(--ocean-light); padding: 1.5rem; border-radius: var(--border-radius); margin-bottom: 1.5rem;">
-                <h5 style="color: var(--primary); margin-bottom: 0.5rem;">
-                    <i class="fas fa-info-circle"></i> Informasi Modal:
-                </h5>
-                <table style="width: 100%; font-size: 0.9rem;">
-                    <tr>
-                        <td>Modal Awal</td>
-                        <td style="text-align: right;">Rp {modal_awal:,.0f}</td>
-                    </tr>
-                    <tr>
-                        <td>{laba_rugi_text} Bersih Periode</td>
-                        <td style="text-align: right; color: var(--{laba_rugi_color});">
-                            {'+' if net_income >= 0 else '-'} Rp {abs(net_income):,.0f}
-                        </td>
-                    </tr>
-        '''
-        
-        if total_prive > 0:
-            table_html += f'''
-                    <tr>
-                        <td>Prive</td>
-                        <td style="text-align: right; color: var(--error);">- Rp {total_prive:,.0f}</td>
-                    </tr>
-            '''
-            
-        table_html += f'''
-                    <tr style="font-weight: bold; border-top: 1px solid var(--primary);">
-                        <td>Modal Akhir (Digunakan di Neraca)</td>
-                        <td style="text-align: right; color: var(--primary); font-size: 1.1rem;">
-                            Rp {modal_akhir:,.0f}
-                        </td>
-                    </tr>
-                </table>
-            </div>
-            
             <div style="overflow-x: auto;">
                 <table class="table">
                     <thead>
@@ -3323,34 +3259,6 @@ def get_post_closing_trial_balance():
                     </tfoot>
                 </table>
             </div>
-            
-            <!-- Verification Section -->
-            <div style="margin-top: 2rem; padding: 1.5rem; background: {'rgba(56, 161, 105, 0.1)' if is_balanced else 'rgba(229, 62, 62, 0.1)'}; border-radius: var(--border-radius);">
-                <h5 style="color: {'var(--success)' if is_balanced else 'var(--error)'}; margin-bottom: 1rem;">
-                    <i class="fas fa-{'check-circle' if is_balanced else 'exclamation-circle'}"></i>
-                    Verifikasi Keseimbangan
-                </h5>
-                
-                <div style="font-size: 0.9rem;">
-                    <p><strong>Persamaan Akuntansi:</strong></p>
-                    <p style="margin: 0.5rem 0;">Aset = Kewajiban + Modal</p>
-                    <p style="margin: 0.5rem 0; font-family: monospace;">
-                        {total_debit:,.0f} = {total_credit:,.0f}
-                    </p>
-                    
-                    {f'''
-                    <div style="margin-top: 1rem; padding: 1rem; background: rgba(229, 62, 62, 0.2); border-radius: var(--border-radius);">
-                        <p style="margin: 0; color: var(--error);">
-                            <strong>Selisih:</strong> Rp {abs(total_debit - total_credit):,.0f}
-                        </p>
-                        <p style="margin: 0.5rem 0 0 0; color: var(--error); font-size: 0.85rem;">
-                            <i class="fas fa-lightbulb"></i> Pastikan jurnal penutup sudah dibuat dengan benar!
-                        </p>
-                    </div>
-                    ''' if not is_balanced else ''}
-                </div>
-            </div>
-        </div>
         '''
         
         return table_html
@@ -3362,7 +3270,7 @@ def get_post_closing_trial_balance():
         return f'<div class="card"><p>Error loading post-closing trial balance: {str(e)}</p></div>'
 
 def get_proper_closing_entries_html():
-    """Generate HTML untuk jurnal penutup dengan format baru - DESKRIPSI DI HEADER"""
+    """Generate HTML untuk jurnal penutup - HANYA tampilkan teks jika belum ada jurnal"""
     try:
         # CARI DARI JournalEntry, bukan ClosingEntry
         closing_journals = JournalEntry.query.filter(
@@ -3370,54 +3278,16 @@ def get_proper_closing_entries_html():
         ).order_by(JournalEntry.date.desc()).all()
 
         if not closing_journals:
+            # Tampilkan teks saja, tanpa tombol
             return '''
             <div class="card">
-                <h4 style="color: var(--primary);">
-                    <i class="fas fa-door-closed"></i> Belum Ada Jurnal Penutup
+                <h4 style="color: var(--primary); margin-bottom: 1.5rem;">
+                    <i class="fas fa-door-closed"></i> Jurnal Penutup
                 </h4>
-                <p style="color: #6B7280; margin-bottom: 1rem;">
-                    Jurnal penutup akan dibuat secara otomatis di akhir periode akuntansi untuk menutup akun nominal.
-                </p>
                 
-                <div style="background: var(--ocean-light); padding: 1.5rem; border-radius: var(--border-radius); margin: 1rem 0;">
-                    <h5 style="color: var(--primary); margin-bottom: 0.5rem;">
-                        <i class="fas fa-info-circle"></i> Apa itu Jurnal Penutup?
-                    </h5>
-                    <p style="margin-bottom: 0.5rem; font-size: 0.9rem;">
-                        Jurnal penutup adalah jurnal yang dibuat di akhir periode akuntansi untuk:
-                    </p>
-                    <ol style="margin: 0; padding-left: 1.2rem; font-size: 0.9rem;">
-                        <li>Menutup semua akun pendapatan</li>
-                        <li>Menutup semua akun beban</li>
-                        <li>Memindahkan saldo ke Ikhtisar Laba Rugi</li>
-                        <li>Memindahkan laba/rugi ke akun Modal</li>
-                        <li>Menutup akun Prive (jika ada)</li>
-                    </ol>
-                </div>
-                
-                <div class="grid grid-2" style="margin-top: 1.5rem;">
-                    <div style="padding: 1rem; background: rgba(56, 161, 105, 0.1); border-radius: var(--border-radius);">
-                        <h6 style="color: var(--success); margin-bottom: 0.5rem;">
-                            <i class="fas fa-calculator"></i> Langkah-langkah:
-                        </h6>
-                        <ol style="margin: 0; padding-left: 1.2rem; font-size: 0.85rem;">
-                            <li>Pendapatan → Ikhtisar Laba Rugi</li>
-                            <li>Beban → Ikhtisar Laba Rugi</li>
-                            <li>Ikhtisar Laba Rugi → Modal</li>
-                            <li>Prive → Modal</li>
-                        </ol>
-                    </div>
-                    
-                    <div style="padding: 1rem; background: rgba(49, 130, 206, 0.1); border-radius: var(--border-radius);">
-                        <h6 style="color: var(--primary); margin-bottom: 0.5rem;">
-                            <i class="fas fa-check-circle"></i> Hasil Akhir:
-                        </h6>
-                        <ul style="margin: 0; padding-left: 1.2rem; font-size: 0.85rem;">
-                            <li>Pendapatan = 0</li>
-                            <li>Beban = 0</li>
-                            <li>Modal = Modal Awal + Laba - Rugi</li>
-                        </ul>
-                    </div>
+                <div style="text-align: center; padding: 2rem; color: #6B7280;">
+                    <i class="fas fa-file-invoice" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                    <p><strong>Belum ada jurnal penutup</strong></p>
                 </div>
             </div>
             '''
@@ -4969,19 +4839,23 @@ def base_html(title, content, additional_css="", additional_js=""):
             modal.style.display = 'block';
         }}
 
-        function contactSellerCOD(orderNumber, totalAmount) {{
-            const message = `Hai Kak, saya telah membuat pesanan COD:
+        function contactSellerCOD() {{
+            const orderNumber = window.currentOrderNumber;
+            const totalAmount = window.currentTotalAmount;
 
-🛍️ Order #: ${{orderNumber}}
-💰 Total: Rp ${{totalAmount.toLocaleString()}}
-📦 Metode: Cash on Delivery
-
-Mohon dipersiapkan pesanannya ya. Terima kasih! 😊`;
+            const message = "Hai kak 👋, saya sudah melakukan pemesanan COD ya.\\n\\n" +
+                            "🧾 Detail Pesanan:\\n" +
+                            "• Order ID: #" + orderNumber + "\\n" +
+                            "• Total Pembayaran: Rp " + totalAmount.toLocaleString() + "\\n" +
+                            "• Metode: Cash on Delivery (COD)\\n\\n" +
+                            "Mohon dipersiapkan pesanannya ya kak 🙏😊\\n" +
+                            "Terima kasih!";
 
             const phone = '+6285876127696';
             const url = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(message);
             window.open(url, '_blank');
         }}
+
 
         function showPaymentModal(orderNumber, paymentMethod, totalAmount) {{
             const paymentInstructions = {{
@@ -4990,7 +4864,7 @@ Mohon dipersiapkan pesanannya ya. Terima kasih! 😊`;
                         <i class="fas fa-qrcode"></i> PEMBAYARAN QRIS
                     </h4>
                     <div style="text-align: center; margin: 1rem 0;">
-                        <img src="/static/assets/qris_code.jpg"
+                        <img src="/static/uploads/assets/qris_code.jpg"
                              alt="QRIS Code Kang-Mas Shop"
                              style="max-width: 300px; width: 100%; height: auto; border-radius: var(--border-radius); border: 3px solid var(--primary); box-shadow: var(--shadow-lg);">
                     </div>
@@ -5000,24 +4874,6 @@ Mohon dipersiapkan pesanannya ya. Terima kasih! 😊`;
                         <div style="font-size: 1.5rem; font-weight: bold; color: var(--success);">
                             Rp ${{totalAmount.toLocaleString()}}
                         </div>
-                    </div>
-
-                    <div style="background: var(--ocean-light); padding: 1rem; border-radius: var(--border-radius);">
-                        <h5 style="color: var(--primary); margin-bottom: 0.5rem;"><i class="fas fa-info-circle"></i> Cara Bayar:</h5>
-                        <ol style="margin: 0; padding-left: 1.2rem; font-size: 0.9rem;">
-                            <li>Buka aplikasi e-wallet atau mobile banking Anda</li>
-                            <li>Pilih menu <strong>Bayar</strong> atau <strong>Scan QR</strong></li>
-                            <li>Scan kode QRIS di atas</li>
-                            <li>Pastikan nominal sesuai: <strong>Rp ${{totalAmount.toLocaleString()}}</strong></li>
-                            <li>Konfirmasi pembayaran</li>
-                        </ol>
-                    </div>
-
-                    <div style="margin-top: 1rem; padding: 1rem; background: rgba(229, 62, 62, 0.1); border-radius: var(--border-radius);">
-                        <p style="margin: 0; color: var(--error); font-size: 0.9rem; text-align: center;">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            <strong>Jangan lupa screenshot bukti pembayaran!</strong>
-                        </p>
                     </div>
                 `,
                 'bri': `
@@ -5184,14 +5040,17 @@ Mohon dipersiapkan pesanannya ya. Terima kasih! 😊`;
             document.getElementById(modalId).style.display = 'none';
         }}
 
-        function contactSeller() {{
+        function contactSellerNonCOD() {{
             const orderNumber = window.currentOrderNumber;
             const totalAmount = window.currentTotalAmount;
 
-            const message = "Hai Kak, saya telah melakukan pembayaran untuk:\\n\\n" +
-                          "🛍️ Order #: " + orderNumber + "\\n" +
-                          "💰 Total: Rp " + totalAmount.toLocaleString() + "\\n\\n" +
-                          "Mohon konfirmasi pembayaran saya ya. Terima kasih! 😊";
+            const message = "Hai kak 👋, saya sudah melakukan pembayaran untuk pesanan saya.\\n\\n" +
+                            "🧾 Detail Pesanan:\\n" +
+                            "• Order ID: #" + orderNumber + "\\n" +
+                            "• Total Pembayaran: Rp " + totalAmount.toLocaleString() + "\\n" +
+                            "• Metode Pembayaran: Non-COD\\n\\n" +
+                            "Mohon bantu konfirmasi pembayarannya ya kak 🙏😊\\n" +
+                            "Terima kasih!";
 
             const phone = '+6285876127696';
             const url = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(message);
@@ -5244,13 +5103,7 @@ Mohon dipersiapkan pesanannya ya. Terima kasih! 😊`;
             
             // Tampilkan konfirmasi kedua
             const secondConfirm = '🔄 KONFIRMASI AKHIR\\n\\n' +
-                                'Reset saldo akan:\\n' +
-                                '• Kas: Rp 10,000,000\\n' +
-                                '• Persediaan: Rp 5,000,000\\n' +
-                                '• Perlengkapan: Rp 6,500,000\\n' +
-                                '• Peralatan: Rp 5,000,000\\n' +
-                                '• Utang: Rp 26,500,000\\n' +
-                                '• Pendapatan: Rp 0\\n\\n' +
+                                'Reset saldo akan:\\n\\n' +
                                 'Lanjutkan reset?';
             
             if (!confirm(secondConfirm)) {{
@@ -5508,6 +5361,53 @@ Mohon dipersiapkan pesanannya ya. Terima kasih! 😊`;
                     setTimeout(() => location.reload(), 1000);
                 }} else {{
                     showNotification('❌ ' + data.message, 'error');
+                }}
+            }});
+        }}
+
+        function deleteJournal(journalId) {{
+            if (!confirm('Yakin ingin menghapus jurnal ini?')) {{
+                return;
+            }}
+
+            const buttons = document.querySelectorAll('button[onclick="deleteJournal(' + journalId + ')"]');
+            let button = null;
+            let originalHtml = '';
+
+            if (buttons.length > 0) {{
+                button = buttons[0];
+                originalHtml = button.innerHTML;
+                button.innerHTML = '<div class="loading"></div>';
+                button.disabled = true;
+            }}
+
+            // 🔴 TADI: '/seller/delete_journal/' + journalId
+            // ✅ SEKARANG: pake route yang bener di Flask
+            fetch('/accounting/journal/' + journalId + '/delete', {{
+                method: 'POST',
+                headers: {{
+                    'X-Requested-With': 'XMLHttpRequest'
+                }}
+            }})
+            .then(response => response.json())
+            .then(data => {{
+                if (data.success || data.status === 'success') {{
+                    showNotification('✅ Jurnal berhasil dihapus', 'success');
+                    setTimeout(() => location.reload(), 800);
+                }} else {{
+                    showNotification('❌ ' + (data.message || 'Gagal menghapus jurnal'), 'error');
+                    if (button) {{
+                        button.innerHTML = originalHtml;
+                        button.disabled = false;
+                    }}
+                }}
+            }})
+            .catch(err => {{
+                console.error(err);
+                showNotification('❌ Terjadi error saat menghapus jurnal', 'error');
+                if (button) {{
+                    button.innerHTML = originalHtml;
+                    button.disabled = false;
                 }}
             }});
         }}
@@ -6067,18 +5967,26 @@ def get_general_journal_entries():
         '''
 
         current_date = None
-        
+
+        # LOOP JURNAL
         for journal in journal_entries:
-            # HEADER TRANSAKSI - TANGGAL, NO TRANSAKSI, DESKRIPSI
-            journal_date = journal.date.strftime('%d/%m/%Y')
-            
-            # Header dengan deskripsi
+            # HEADER PER JURNAL (DI SINI DITAMBAH TOMBOL HAPUS)
             table_html += f'''
             <tr style="background: rgba(49, 130, 206, 0.1); font-weight: bold;">
                 <td>{journal.date.strftime('%d/%m/%Y %H:%M')}</td>
                 <td>{journal.transaction_number}</td>
-                <td colspan="4" style="color: var(--primary);">
+                <td colspan="3" style="color: var(--primary);">
                     {journal.description}
+                </td>
+                <td style="text-align: right;">
+                    <button 
+                        type="button"
+                        class="btn btn-danger btn-sm"
+                        style="border:none; background: none; color: #DC2626; cursor: pointer;"
+                        title="Hapus jurnal ini"
+                        onclick="deleteJournal({journal.id})">
+                        <i class="fas fa-trash"></i>
+                    </button>
                 </td>
             </tr>
             '''
@@ -6137,8 +6045,11 @@ def get_general_journal_entries():
 def get_adjustment_journal_entries():
     """Tampilkan jurnal penyesuaian dengan format baru - DESKRIPSI DI HEADER"""
     try:
-        journal_entries = JournalEntry.query.filter_by(journal_type='adjustment').order_by(
-            JournalEntry.date.desc(), JournalEntry.id.desc()
+        journal_entries = JournalEntry.query.filter_by(
+            journal_type='adjustment'
+        ).order_by(
+            JournalEntry.date.desc(),
+            JournalEntry.id.desc()
         ).all()
 
         if not journal_entries:
@@ -6211,13 +6122,23 @@ def get_adjustment_journal_entries():
         '''
         
         for journal in journal_entries:
-            # HEADER TRANSAKSI - TANGGAL, NO TRANSAKSI, DESKRIPSI
+            # HEADER TRANSAKSI - TANGGAL, NO TRANSAKSI, DESKRIPSI + TOMBOL HAPUS
             table_html += f'''
             <tr style="background: rgba(56, 161, 105, 0.1); font-weight: bold;">
                 <td>{journal.date.strftime('%d/%m/%Y %H:%M')}</td>
                 <td>{journal.transaction_number}</td>
-                <td colspan="4" style="color: var(--success);">
+                <td colspan="3" style="color: var(--success);">
                     {journal.description}
+                </td>
+                <td style="text-align: right;">
+                    <button 
+                        type="button"
+                        class="btn btn-danger btn-sm"
+                        style="border:none; background: none; color: #DC2626; cursor: pointer;"
+                        title="Hapus jurnal ini"
+                        onclick="deleteJournal({journal.id})">
+                        <i class="fas fa-trash"></i>
+                    </button>
                 </td>
             </tr>
             '''
@@ -6230,8 +6151,8 @@ def get_adjustment_journal_entries():
                     <td></td>
                     <td>{detail.account.name}</td>
                     <td>{detail.account.code}</td>
-                    <td class="debit">{"Rp {0:,.0f}".format(detail.debit) if detail.debit > 0 else ""}</td>
-                    <td class="credit">{"Rp {0:,.0f}".format(detail.credit) if detail.credit > 0 else ""}</td>
+                    <td class="debit">{"Rp {:,.0f}".format(detail.debit) if detail.debit > 0 else ""}</td>
+                    <td class="credit">{"Rp {:,.0f}".format(detail.credit) if detail.credit > 0 else ""}</td>
                 </tr>
                 '''
 
@@ -6240,12 +6161,12 @@ def get_adjustment_journal_entries():
             total_credit = sum(d.credit for d in journal.journal_details)
             
             table_html += f'''
-            <tr style="background: rgba(56, 161, 105, 0.03);">
-                <td colspan="4" style="text-align: right; font-weight: bold; padding: 0.5rem 1rem; border-top: 1px solid rgba(56, 161, 105, 0.1);">
-                    Total Penyesuaian:
+            <tr style="background: rgba(0,0,0,0.02);">
+                <td colspan="4" style="text-align: right; font-weight: bold; padding: 0.5rem 1rem; border-top: 1px solid rgba(0,0,0,0.1);">
+                    Total Jurnal:
                 </td>
-                <td class="debit" style="font-weight: bold; border-top: 1px solid rgba(56, 161, 105, 0.1);">Rp {total_debit:,.0f}</td>
-                <td class="credit" style="font-weight: bold; border-top: 1px solid rgba(56, 161, 105, 0.1);">Rp {total_credit:,.0f}</td>
+                <td class="debit" style="font-weight: bold; border-top: 1px solid rgba(0,0,0,0.1);">Rp {total_debit:,.0f}</td>
+                <td class="credit" style="font-weight: bold; border-top: 1px solid rgba(0,0,0,0.1);">Rp {total_credit:,.0f}</td>
             </tr>
             <tr><td colspan="6" style="height: 1rem; background: transparent;"></td></tr>
             '''
@@ -6256,12 +6177,15 @@ def get_adjustment_journal_entries():
             </div>
         </div>
         '''
-
+        
         return table_html
         
     except Exception as e:
         print(f"Error generating adjustment journal entries: {e}")
+        import traceback
+        traceback.print_exc()
         return '<div class="card"><p>Error loading adjustment journal entries</p></div>'
+
 
 def verify_nominal_accounts_closed():
     """Verifikasi apakah semua akun nominal sudah ditutup (saldo = 0)"""
@@ -6415,7 +6339,7 @@ def get_simplified_accounting_content():
 
     <div id="saldo-awal" class="tab-content">
         <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                 <h3 style="color: var(--primary); margin: 0;"><i class="fas fa-file-invoice-dollar"></i> Saldo Awal</h3>
                 <div>
                     <a href="/seller/edit_initial_balances" class="btn btn-warning">
@@ -6426,29 +6350,7 @@ def get_simplified_accounting_content():
                     </button>
                 </div>
             </div>
-        
-            <p style="margin-bottom: 1rem; color: #6B7280;">
-                <i class="fas fa-info-circle"></i> Saldo awal diambil secara otomatis dari database. 
-                <strong>Hanya menampilkan akun REAL (Aset, Kewajiban, Ekuitas).</strong>
-                Pendapatan & Beban tidak memiliki saldo awal (selalu 0).
-            </p>
-        
-            <div style="background: var(--ocean-light); padding: 1rem; border-radius: var(--border-radius); margin-bottom: 1rem;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <h5 style="color: var(--primary); margin: 0;">Neraca Saldo Awal (Akun REAL saja)</h5>
-                        <p style="margin: 0.25rem 0 0 0; font-size: 0.9rem;">
-                            Aset = Kewajiban + Ekuitas | Pendapatan & Beban = 0
-                        </p>
-                    </div>
-                    <div style="text-align: right;">
-                        <a href="/seller/edit_initial_balances" class="btn btn-sm btn-primary">
-                            <i class="fas fa-calculator"></i> Sesuaikan Saldo REAL
-                        </a>
-                    </div>
-                </div>
-            </div>
-        
+
             <table class="table">
                 <thead>
                     <tr>
@@ -6462,32 +6364,6 @@ def get_simplified_accounting_content():
                     {get_saldo_awal_html()}
                 </tbody>
             </table>
-        
-            <!-- Informasi tentang akun nominal -->
-            <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(156, 163, 175, 0.1); border-radius: var(--border-radius);">
-                <h5 style="color: #6B7280; margin-bottom: 0.5rem;">
-                    <i class="fas fa-info-circle"></i> Informasi Akun Nominal
-                </h5>
-                <p style="margin: 0; font-size: 0.9rem;">
-                    <strong>Pendapatan & Beban</strong> adalah akun nominal yang saldo awalnya selalu 0.
-                    Mereka tidak muncul di saldo awal karena akan ditutup di akhir periode akuntansi.
-                    Akun nominal hanya akan memiliki saldo dari transaksi selama periode berjalan.
-                </p>
-            </div>
-        
-            <!-- Reset Warning -->
-            <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(229, 62, 62, 0.1); border-radius: var(--border-radius);">
-                <h5 style="color: var(--error); margin-bottom: 0.5rem;">
-                    <i class="fas fa-exclamation-triangle"></i> Reset ke Default
-                </h5>
-                <p style="margin: 0; font-size: 0.9rem;">
-                    Tombol "Reset Default" akan mengembalikan semua saldo REAL ke nilai default sistem. 
-                    <strong>Akun nominal (Pendapatan & Beban) akan direset ke 0.</strong>
-                </p>
-                <button class="btn btn-danger" onclick="resetBalances()" style="margin-top: 0.5rem;">
-                    <i class="fas fa-bomb"></i> Reset Semua ke Nilai Default
-                </button>
-            </div>
         </div>
     </div>
 
@@ -7603,34 +7479,75 @@ def cart():
                     total += subtotal
 
                     cart_html += f'''
-                    <div class="card" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <div class="card" style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; margin-bottom: 1rem; gap: 1.5rem;">
                         <div style="flex: 1;">
-                            <h4>{product.name}</h4>
-                            <p>Harga: Rp {product.price:,.0f}</p>
-                            <p>Subtotal: Rp {subtotal:,.0f}</p>
+                            <h4 style="margin: 0 0 0.25rem 0;">{product.name}</h4>
+                            <p style="margin: 0;">Harga: Rp {product.price:,.0f}</p>
+                            <p style="margin: 0.15rem 0 0 0; font-weight: 500;">Subtotal: Rp {subtotal:,.0f}</p>
                         </div>
                         <div style="display: flex; align-items: center; gap: 1rem;">
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <button class="btn btn-sm btn-warning" onclick="updateCartQuantity({item.id}, -1)">
-                                    <i class="fas fa-minus"></i>
+                            <form action="/update_cart_item/{item.id}" method="POST" style="display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+                                <button type="button"
+                                        class="qty-btn"
+                                        data-target="qty-{item.id}"
+                                        data-action="minus"
+                                        style="border: none; padding: 0.5rem 1.1rem; border-radius: 999px; font-size: 1.1rem; font-weight: 600; background: linear-gradient(135deg,#d88916,#c06a00); color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.15);">
+                                    -
                                 </button>
-                                <input type="number" id="quantity_{item.id}" 
-                                       value="{item.quantity}" min="1" max="{product.stock}"
-                                       style="width: 60px; text-align: center; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"
-                                       onchange="updateCartQuantityInput({item.id})">
-                                <button class="btn btn-sm btn-success" onclick="updateCartQuantity({item.id}, 1)">
-                                    <i class="fas fa-plus"></i>
+                                <input
+                                    id="qty-{item.id}"
+                                    type="number"
+                                    name="quantity"
+                                    value="{item.quantity}"
+                                    min="1"
+                                    style="width: 70px; text-align: center; padding: 0.35rem 0.25rem; border-radius: 6px; border: 1px solid #ddd;"
+                                >
+                                <button type="button"
+                                        class="qty-btn"
+                                        data-target="qty-{item.id}"
+                                        data-action="plus"
+                                        style="border: none; padding: 0.5rem 1.1rem; border-radius: 999px; font-size: 1.1rem; font-weight: 600; background: linear-gradient(135deg,#23b45d,#d88916); color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.15);">
+                                    +
                                 </button>
-                                <span style="font-size: 0.9rem; color: #666;">
-                                    Stok: {product.stock}
+                                <span style="margin-left: 0.5rem; font-size: 0.9rem; color: #555;">
+                                    Stok: {getattr(product, 'stock', 0)}
                                 </span>
-                            </div>
-                            <button class="btn btn-danger" onclick="removeFromCart({item.id})">
-                                <i class="fas fa-trash"></i> Hapus
-                            </button>
+                                <button type="submit" style="display: none;"></button>
+                            </form>
+                            <form action="/remove_from_cart/{item.id}" method="POST" style="margin: 0;">
+                                <button type="submit"
+                                        class="btn btn-danger"
+                                        style="padding: 0.5rem 1.4rem; border-radius: 999px; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.15);">
+                                    🗑 Hapus
+                                </button>
+                            </form>
                         </div>
                     </div>
                     '''
+            cart_html += '''
+            <script>
+                document.querySelectorAll('.qty-btn').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        var targetId = this.getAttribute('data-target');
+                        var action = this.getAttribute('data-action');
+                        var input = document.getElementById(targetId);
+                        if (!input) return;
+
+                        var current = parseInt(input.value) || 1;
+                        if (action === 'minus') {
+                            if (current > 1) current -= 1;
+                        } else if (action === 'plus') {
+                            current += 1;
+                        }
+                        input.value = current;
+
+                        // auto-submit form untuk update quantity di backend
+                        var form = this.closest('form');
+                        if (form) form.submit();
+                    });
+                });
+            </script>
+            '''
 
             content = f'''
             <h1 style="color: var(--primary);"><i class="fas fa-shopping-cart"></i> Keranjang Belanja</h1>
@@ -7638,9 +7555,6 @@ def cart():
             <div class="card">
                 <h3>Total: Rp {total:,.0f}</h3>
                 <div style="display: flex; gap: 1rem; margin-top: 1rem;">
-                    <button class="btn btn-primary" onclick="updateAllQuantities()">
-                        <i class="fas fa-sync-alt"></i> Update Semua Quantity
-                    </button>
                     <button class="btn btn-success" onclick="checkout()">
                         <i class="fas fa-credit-card"></i> Checkout Sekarang
                     </button>
@@ -7671,6 +7585,42 @@ def remove_from_cart(cart_item_id):
     except Exception as e:
         print(f"Error removing from cart: {e}")
         flash('Terjadi error saat menghapus dari keranjang.', 'error')
+        return redirect('/cart')
+@app.route('/update_cart_item/<int:cart_item_id>', methods=['POST'])
+@login_required
+def update_cart_item(cart_item_id):
+    try:
+        # Hanya customer yang boleh ubah keranjang
+        if current_user.user_type != 'customer':
+            flash('Akses ditolak.', 'error')
+            return redirect('/')
+
+        cart_item = CartItem.query.get(cart_item_id)
+        if not cart_item or cart_item.user_id != current_user.id:
+            flash('Item keranjang tidak ditemukan.', 'error')
+            return redirect('/cart')
+
+        # Ambil quantity dari form
+        quantity = request.form.get('quantity', type=int)
+        if not quantity or quantity < 1:
+            flash('Jumlah ikan minimal 1.', 'error')
+            return redirect('/cart')
+
+        # Opsional: cek stok produk
+        product = Product.query.get(cart_item.product_id)
+        if product and quantity > product.stock:
+            flash(f'Stok {product.name} hanya {product.stock}.', 'error')
+            return redirect('/cart')
+
+        cart_item.quantity = quantity
+        db.session.commit()
+        flash('Jumlah ikan di keranjang berhasil diperbarui.', 'success')
+        return redirect('/cart')
+
+    except Exception as e:
+        db.session.rollback()
+        print("Error in update_cart_item:", e)
+        flash('Terjadi error saat mengubah jumlah di keranjang.', 'error')
         return redirect('/cart')
 
 @app.route('/checkout')
@@ -7711,9 +7661,10 @@ def checkout_page():
                         <option value="jnt">JNT Express - Rp 12,000</option>
                         <option value="pos">POS Indonesia - Rp 10,000</option>
                         <option value="grab">Grab Express - Rp 20,000</option>
+                        <option value="seller">Pengiriman oleh penjual (khusus wilayah Semarang) - Gratis</option>
                     </select>
                 </div>
-
+                
                 <div class="form-group">
                     <label class="form-label">Metode Pembayaran</label>
                     <select id="payment_method" class="form-control" required>
@@ -7900,31 +7851,76 @@ def orders():
                 customer_info = f"<p><strong>Customer:</strong> {customer.full_name}</p>" if current_user.user_type != 'customer' else ""
 
                 orders_html += f'''
-                <div class="card">
-                    <h4>Order #{order.order_number}</h4>
-                    {customer_info}
-                    <p><strong>Total:</strong> Rp {order.total_amount:,.0f}</p>
-                    <p><strong>Status:</strong> {status_display}</p>
-                    <p><strong>Pembayaran:</strong> {payment_status_display}</p>
-                    <p><strong>Metode:</strong> {order.payment_method} | <strong>Pengiriman:</strong> {order.shipping_method}</p>
-                    <p><strong>Tanggal:</strong> {order.order_date.strftime('%d/%m/%Y %H:%M')}</p>
-                    <p><strong>Alamat:</strong> {order.shipping_address}</p>
-                    {order.tracking_info and f'<p><strong>Tracking:</strong> {order.tracking_info}</p>' or ''}
-
-                    {current_user.user_type == 'seller' and order.payment_status == 'unpaid' and '''
-                    <div style="margin-top: 1rem; padding: 1rem; background: rgba(229, 62, 62, 0.1); border-radius: 8px;">
-                        <p style="color: var(--error); margin: 0;">
-                            <strong>\u26A0\uFE0F Menunggu Pembayaran:</strong> Pesanan belum dapat diproses karena pembayaran belum diterima.
-                        </p>
+                <div class="order-card" style="
+                    border: 3px solid #d66a00;
+                    border-radius: 20px;
+                    padding: 1.8rem;
+                    margin-bottom: 1.5rem;
+                    background: #ffffff;
+                    box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+                ">
+                    <div class="order-title" style="
+                        font-weight: 600;
+                        font-size: 1.1rem;
+                        margin-bottom: 1rem;
+                        display: flex;
+                        align-items: center;
+                        gap: .5rem;
+                    ">
+                        <i class="fas fa-box"></i> Pesanan
                     </div>
-                    ''' or ''}
 
-                    {current_user.user_type == 'seller' and order.payment_status == 'paid' and order.status == 'processing' and f'''
-                    <form action="/seller/update_order_status/{order.id}" method="POST" style="margin-top: 1rem;">
-                        <input type="hidden" name="status" value="completed">
-                        <button type="submit" class="btn btn-success">Selesaikan Order</button>
-                    </form>
-                    ''' or ''}
+                    <div class="order-section" style="margin-bottom: 1rem;">
+                        <div class="order-row" style="margin-bottom: .4rem;">
+                            <span class="order-label" style="font-weight: 600;">Order ID:</span>
+                            <span class="order-value">#{order.order_number}</span>
+                        </div>
+                        <div class="order-row" style="margin-bottom: .4rem;">
+                            <span class="order-label" style="font-weight: 600;">Total:</span>
+                            <span class="order-value">Rp {order.total_amount:,.0f}</span>
+                        </div>
+                        <div class="order-row" style="margin-bottom: .4rem;">
+                            <span class="order-label" style="font-weight: 600;">Status:</span>
+                            <span class="badge-processing" style="
+                                padding: .3rem .8rem;
+                                background: #e76f51;
+                                color: white;
+                                border-radius: 12px;
+                                font-size: .85rem;
+                                font-weight: 600;
+                            ">{order.status.upper()}</span>
+                        </div>
+                        <div class="order-row" style="margin-bottom: .4rem;">
+                            <span class="order-label" style="font-weight: 600;">Pembayaran:</span>
+                            <span class="badge-paid" style="
+                                padding: .3rem .8rem;
+                                background: #2a9d8f;
+                                color: white;
+                                border-radius: 12px;
+                                font-size: .85rem;
+                                font-weight: 600;
+                            ">{order.payment_status.upper()}</span>
+                        </div>
+                    </div>
+
+                    <div class="order-section">
+                        <div class="order-row" style="margin-bottom: .4rem;">
+                            <span class="order-label" style="font-weight: 600;">Metode:</span>
+                            <span class="order-value">{order.payment_method}</span>
+                        </div>
+                        <div class="order-row" style="margin-bottom: .4rem;">
+                            <span class="order-label" style="font-weight: 600;">Pengiriman:</span>
+                            <span class="order-value">{order.shipping_method}</span>
+                        </div>
+                        <div class="order-row" style="margin-bottom: .4rem;">
+                            <span class="order-label" style="font-weight: 600;">Tanggal:</span>
+                            <span class="order-value">{order.order_date.strftime('%d/%m/%Y %H:%M')}</span>
+                        </div>
+                        <div class="order-row" style="margin-bottom: .4rem;">
+                            <span class="order-label" style="font-weight: 600;">Alamat:</span>
+                            <span class="order-value">{order.shipping_address}</span>
+                        </div>
+                    </div>
                 </div>
                 '''
 
@@ -8200,20 +8196,6 @@ def edit_initial_balances():
                 <i class="fas fa-edit"></i> Edit Saldo Awal - HANYA Akun REAL
             </h2>
             
-            <div style="background: var(--ocean-light); padding: 1.5rem; border-radius: var(--border-radius); margin-bottom: 2rem;">
-                <h4 style="color: var(--primary); margin-bottom: 0.5rem;">
-                    <i class="fas fa-info-circle"></i> PETUNJUK PENGEDITAN SALDO AWAL
-                </h4>
-                <ul style="margin: 0; padding-left: 1.2rem; font-size: 0.9rem;">
-                    <li><strong>✅ BOLEH Diedit:</strong> Aset, Kewajiban, Ekuitas</li>
-                    <li><strong>❌ TIDAK BOLEH Diedit:</strong> Pendapatan & Beban (saldo awal selalu 0)</li>
-                    <li><strong>Format:</strong> Debit (+) untuk Aset</li>
-                    <li><strong>Format:</strong> Kredit (+) untuk Kewajiban & Ekuitas</li>
-                    <li>Gunakan angka tanpa tanda titik atau koma (contoh: 1000000 untuk 1 juta)</li>
-                    <li><strong style="color: var(--error);">⚠️ PERINGATAN:</strong> Semua transaksi sebelumnya akan dihapus!</li>
-                </ul>
-            </div>
-            
             <form method="POST" id="editBalancesForm">
         '''
         
@@ -8356,52 +8338,7 @@ def edit_initial_balances():
                     <p>Pastikan kedua nilai sama sebelum menyimpan!</p>
                 </div>
             </div>
-            
-            <!-- INFO AKUN NOMINAL (TIDAK BOLEH DEDIT) -->
-            <div style="margin: 2rem 0; padding: 1.5rem; background: rgba(156, 163, 175, 0.1); border-left: 4px solid #9CA3AF; border-radius: var(--border-radius);">
-                <h4 style="color: #6B7280; margin-bottom: 0.5rem;">
-                    <i class="fas fa-info-circle"></i> INFO: Akun Nominal (Tidak Diedit)
-                </h4>
-                <p style="margin: 0.5rem 0; color: #6B7280;">
-                    <strong>Pendapatan & Beban</strong> adalah akun nominal yang saldo awalnya selalu 0.
-                    Mereka akan di-reset otomatis saat Anda menyimpan perubahan ini.
-                </p>
-                <div style="margin-top: 1rem; font-size: 0.9rem;">
-                    <p><strong>Akun Pendapatan & Beban yang akan di-reset ke 0:</strong></p>
-                    <ul style="margin: 0.5rem 0 0 1rem; color: #6B7280;">
-        '''
-        
-        # Tampilkan daftar akun nominal yang akan direset
-        for account in nominal_accounts:
-            form_html += f'''
-                        <li>{account.code} - {account.name} <span style="color: #9CA3AF;">(akan direset ke 0)</span></li>
-            '''
-        
-        form_html += '''
-                    </ul>
-                </div>
-            </div>
-            
-            <!-- Warning Card -->
-            <div style="margin: 2rem 0; padding: 1.5rem; background: rgba(229, 62, 62, 0.1); border-left: 4px solid var(--error); border-radius: var(--border-radius);">
-                <h4 style="color: var(--error); margin-bottom: 0.5rem;">
-                    <i class="fas fa-exclamation-triangle"></i> PERINGATAN PENTING
-                </h4>
-                <p style="margin: 0.5rem 0; color: var(--error);">
-                    <strong>Mengedit saldo awal akan:</strong>
-                </p>
-                <ul style="margin: 0.5rem 0 0 0; padding-left: 1.2rem; color: var(--error);">
-                    <li>Menghapus SEMUA transaksi jurnal yang sudah ada</li>
-                    <li>Menghapus SEMUA kartu persediaan</li>
-                    <li>Merestok ulang produk berdasarkan saldo persediaan baru</li>
-                    <li>Reset semua pesanan ke status "pending"</li>
-                    <li>Kosongkan keranjang belanja</li>
-                    <li><strong>Reset semua akun Pendapatan & Beban ke 0</strong></li>
-                </ul>
-                <p style="margin: 1rem 0 0 0; font-size: 0.9rem; color: var(--error);">
-                    <strong>⏰ Waktu terbaik:</strong> Di awal periode akuntansi atau saat setup sistem baru.
-                </p>
-            </div>
+
             
             <div class="modal-buttons">
                 <button type="button" class="btn btn-primary" onclick="calculateBalances()">
@@ -8634,9 +8571,7 @@ def edit_initial_balances():
 @login_required
 @seller_required
 def reset_balances():
-    """Reset saldo awal ke nilai default - HANYA untuk akun REAL"""
     try:
-        # Konfirmasi reset
         data = request.get_json() if request.is_json else {}
         confirm = data.get('confirm', False)
         
@@ -8647,54 +8582,43 @@ def reset_balances():
                 'requires_confirm': True
             })
         
-        # PERBAIKAN: Hanya reset akun REAL
-        real_accounts = Account.query.filter(
-            Account.category.in_(['asset', 'liability', 'equity'])
-        ).all()
+        # RESET SEMUA AKUN JADI 0
+        all_accounts = Account.query.all()
         
-        nominal_accounts = Account.query.filter(
-            Account.category.in_(['revenue', 'expense'])
-        ).all()
+        for account in all_accounts:
+            account.balance = 0  # Semua jadi 0
         
-        # Reset akun REAL ke default
-        for account in real_accounts:
-            if account.type == 'kas':
-                account.balance = 10000000
-            elif account.type == 'persediaan':
-                account.balance = 5000000
-            elif account.type == 'perlengkapan':
-                account.balance = 6500000
-            elif account.type == 'peralatan':
-                account.balance = 5000000
-            elif account.type == 'hutang':
-                account.balance = 26500000  # 26.5 juta
-            elif account.type == 'modal':
-                account.balance = -11500000  # -11.5 juta (10+5+6.5+5 - 26.5)
-            else:
-                account.balance = 0
-        
-        # Reset akun NOMINAL ke 0
-        for account in nominal_accounts:
-            account.balance = 0
-        
-        print(f"✅ Reset {len(real_accounts)} akun REAL dan {len(nominal_accounts)} akun NOMINAL")
+        print(f"✅ Reset {len(all_accounts)} akun jadi 0")
 
-        # Reset product stocks sesuai saldo awal
+        # Reset product stocks jadi 0
         products = Product.query.all()
         for product in products:
-            if product.name == 'Bibit Ikan Mas':
-                product.stock = 2975
-                product.cost_price = 1000
-            elif product.name == 'Ikan Mas Konsumsi':
-                product.stock = 150
-                product.cost_price = 13500
+            product.stock = 0
+            product.cost_price = 1000  # Default cost
 
+        # Reset order status
+        Order.query.update({
+            'payment_status': 'unpaid',
+            'status': 'pending'
+        })
+        
+        # Clear cart items
+        CartItem.query.delete()
+        
+        # Clear all transactions
+        JournalEntry.query.delete()
+        JournalDetail.query.delete()
+        InventoryTransaction.query.delete()
+        InventoryCard.query.delete()
+        ClosingEntry.query.delete()
+        ClosingDetail.query.delete()
+        
         db.session.commit()
 
-        flash('✅ Saldo awal berhasil direset ke nilai default!', 'success')
+        flash('✅ Saldo awal berhasil direset ke 0! Sistem bersih seperti baru.', 'success')
         return jsonify({
             'success': True, 
-            'message': 'Saldo awal berhasil direset ke nilai default'
+            'message': 'Saldo awal berhasil direset ke 0'
         })
 
     except Exception as e:
@@ -10858,6 +10782,135 @@ def create_closing_entries_route():
             'success': False,
             'message': f'Terjadi error: {str(e)}'
         })
+
+@app.route('/accounting/journal/<int:journal_id>/delete', methods=['POST'])
+@login_required
+@seller_required
+def delete_journal(journal_id):
+    """Hapus jurnal dan SEMUA data terkait (JournalDetail, update saldo akun, update inventory)"""
+    journal = JournalEntry.query.get_or_404(journal_id)
+
+    try:
+        print(f"🔄 [DELETE JOURNAL] Memulai penghapusan jurnal #{journal_id}: {journal.transaction_number}")
+        
+        # ===== 1. AMBIL DATA SEBELUM DIHAPUS =====
+        # Simpan informasi penting untuk rollback
+        journal_details = journal.journal_details.copy()
+        journal_type = journal.journal_type
+        transaction_number = journal.transaction_number
+        description = journal.description
+        
+        print(f"📋 [DELETE JOURNAL] Jurnal memiliki {len(journal_details)} detail entri")
+        
+        # ===== 2. ROLLBACK SALDO AKUN =====
+        for detail in journal_details:
+            account = Account.query.get(detail.account_id)
+            if account:
+                print(f"📊 [DELETE JOURNAL] Rollback akun {account.code} - {account.name}")
+                print(f"   Sebelum: Rp {account.balance:,.0f}")
+                print(f"   Detail: Debit={detail.debit}, Credit={detail.credit}")
+                
+                # Rollback berdasarkan kategori akun
+                if account.category in ['asset', 'expense']:
+                    # Asset/Expense: Debit menambah, Credit mengurangi
+                    # Untuk rollback: kurangi debit, tambahi credit
+                    account.balance -= detail.debit
+                    account.balance += detail.credit
+                else:
+                    # Liability/Equity/Revenue: Credit menambah, Debit mengurangi
+                    # Untuk rollback: tambahi debit, kurangi credit
+                    account.balance += detail.debit
+                    account.balance -= detail.credit
+                
+                print(f"   Sesudah: Rp {account.balance:,.0f}")
+        
+        # ===== 3. ROLLBACK INVENTORY JIKA JURNAL PENJUALAN =====
+        if journal_type in ['sales', 'closing_revenue', 'closing_expense']:
+            print(f"🔄 [DELETE JOURNAL] Rollback inventory untuk jurnal penjualan")
+            
+            # Cari order yang terkait dengan jurnal ini
+            orders = Order.query.filter(
+                Order.order_number.like(f"%{transaction_number.replace('SALES', 'ORD')}%")
+            ).all()
+            
+            for order in orders:
+                print(f"   Rollback order #{order.order_number}")
+                
+                # Kembalikan stok produk
+                order_items = OrderItem.query.filter_by(order_id=order.id).all()
+                for item in order_items:
+                    product = Product.query.get(item.product_id)
+                    if product:
+                        print(f"   Kembalikan stok {product.name}: +{item.quantity}")
+                        product.stock += item.quantity
+                        
+                        # Rollback inventory transaction
+                        inventory_transactions = InventoryTransaction.query.filter_by(
+                            product_id=product.id,
+                            description=description
+                        ).all()
+                        
+                        for inv_tx in inventory_transactions:
+                            db.session.delete(inv_tx)
+                            print(f"   Hapus transaksi inventory: {inv_tx.id}")
+        
+        # ===== 4. ROLLBACK INVENTORY JIKA JURNAL PEMBELIAN =====
+        elif journal_type in ['purchase', 'general'] and 'pembelian' in description.lower():
+            print(f"🔄 [DELETE JOURNAL] Rollback inventory untuk jurnal pembelian")
+            
+            # Cari inventory transaction dengan description yang sama
+            inventory_transactions = InventoryTransaction.query.filter(
+                InventoryTransaction.description.like(f"%{description}%")
+            ).all()
+            
+            for inv_tx in inventory_transactions:
+                product = Product.query.get(inv_tx.product_id)
+                if product:
+                    print(f"   Rollback stok {product.name}: -{inv_tx.quantity_in}")
+                    product.stock -= inv_tx.quantity_in
+                
+                db.session.delete(inv_tx)
+                print(f"   Hapus transaksi inventory: {inv_tx.id}")
+        
+        # ===== 5. ROLLBACK KARTU PERSEDIAAN (InventoryCard) =====
+        inventory_cards = InventoryCard.query.filter_by(
+            transaction_number=transaction_number
+        ).all()
+        
+        for card in inventory_cards:
+            print(f"🗑️ [DELETE JOURNAL] Hapus kartu persediaan: {card.id}")
+            db.session.delete(card)
+        
+        # ===== 6. HAPUS JOURNAL DETAIL =====
+        for detail in journal_details:
+            print(f"🗑️ [DELETE JOURNAL] Hapus journal detail: {detail.id}")
+            db.session.delete(detail)
+        
+        # ===== 7. HAPUS JOURNAL ENTRY =====
+        print(f"🗑️ [DELETE JOURNAL] Hapus journal entry: {journal.id}")
+        db.session.delete(journal)
+        
+        # ===== 8. COMMIT SEMUA PERUBAHAN =====
+        db.session.commit()
+        
+        print(f"✅ [DELETE JOURNAL] Jurnal #{journal_id} berhasil dihapus beserta semua data terkait")
+        
+        flash(f'Jurnal berhasil dihapus beserta semua data terkait!', 'success')
+        return jsonify({
+            'status': 'success',
+            'message': 'Jurnal berhasil dihapus beserta semua data terkait.'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f'❌ [DELETE JOURNAL] Error delete journal: {e}')
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'status': 'error',
+            'message': f'Gagal menghapus jurnal: {str(e)}'
+        }), 500
+
 
 # ===== API ROUTES =====
 @app.route('/api/cart/add', methods=['POST'])
