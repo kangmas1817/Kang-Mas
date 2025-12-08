@@ -356,7 +356,7 @@ class InventoryTransaction(db.Model):
 
 class ClosingEntry(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    transaction_number = db.Column(db.String(20), unique=True, nullable=False)
+    transaction_number = db.Column(db.String(50), unique=True, nullable=False)
     date = db.Column(db.DateTime, nullable=False)
     description = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
