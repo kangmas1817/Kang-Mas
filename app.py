@@ -5027,7 +5027,7 @@ Mohon dipersiapkan pesanannya ya. Terima kasih! 😊`;
                     <div style="background: white; padding: 1.5rem; border-radius: var(--border-radius); border-left: 4px solid var(--primary); text-align: center;">
                         <p style="margin: 0.75rem 0; font-size: 1.1rem;">
                             <strong>No. Rekening:</strong><br>
-                            <span style="color: var(--primary); font-weight: bold; font-size: 1.3rem;">1234 5678 9012</span>
+                            <span style="color: var(--primary); font-weight: bold; font-size: 1.3rem;">1270 0485 9713 5</span>
                         </p>
                         <p style="margin: 0.75rem 0; font-size: 1.1rem;">
                             <strong>Atas Nama:</strong><br>
@@ -5047,7 +5047,7 @@ Mohon dipersiapkan pesanannya ya. Terima kasih! 😊`;
                     <div style="background: white; padding: 1.5rem; border-radius: var(--border-radius); border-left: 4px solid var(--primary); text-align: center;">
                         <p style="margin: 0.75rem 0; font-size: 1.1rem;">
                             <strong>No. Rekening:</strong><br>
-                            <span style="color: var(--primary); font-weight: bold; font-size: 1.3rem;">9876 5432 1098</span>
+                            <span style="color: var(--primary); font-weight: bold; font-size: 1.3rem;">8274 9150 64</span>
                         </p>
                         <p style="margin: 0.75rem 0; font-size: 1.1rem;">
                             <strong>Atas Nama:</strong><br>
@@ -7691,6 +7691,7 @@ def checkout_page():
                         <option value="jnt">JNT Express - Rp 12,000</option>
                         <option value="pos">POS Indonesia - Rp 10,000</option>
                         <option value="grab">Grab Express - Rp 20,000</option>
+                        <option value="semarang_gratis">Pengiriman Penjual (Gratis) - Khusus Semarang</option>
                     </select>
                 </div>
 
@@ -7698,9 +7699,9 @@ def checkout_page():
                     <label class="form-label">Metode Pembayaran</label>
                     <select id="payment_method" class="form-control" required>
                         <option value="">Pilih metode pembayaran</option>
-                        <option value="bri">BRI (123456)</option>
-                        <option value="bca">BCA (789012)</option>
-                        <option value="mandiri">Mandiri (345678)</option>
+                        <option value="bri">BRI (10247 98530 1746)</option>
+                        <option value="bca">BCA (8274915064)</option>
+                        <option value="mandiri">Mandiri (6012093748516)</option>
                         <option value="qris">QRIS</option>
                         <option value="gopay">Gopay +6289654733875</option>
                         <option value="dana">Dana +6289654733875</option>
@@ -11181,4 +11182,3 @@ if __name__ == '__main__':
     
     print(f"🚀 Server starting on port {port} (debug: {debug_mode})")
     app.run(host='0.0.0.0', port=port, debug=debug_mode)
-
