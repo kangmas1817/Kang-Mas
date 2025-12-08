@@ -8,6 +8,7 @@ load_dotenv()
 # Configurations akan diambil dari environment variables atau default
 
 # ===== IMPORTS =====
+# ===== IMPORTS =====
 from pathlib import Path
 from flask import Flask, jsonify, request, redirect, url_for, session, flash, get_flashed_messages
 from flask_sqlalchemy import SQLAlchemy
@@ -30,49 +31,61 @@ from dotenv import load_dotenv  # Pastikan ini diimpor
 # ===== INISIALISASI APLIKASI =====
 app = Flask(__name__)
 
-# ===== DATABASE CONFIGURATION FOR SUPABASE =====
+base_dir = Path(__file__).parent
+db_path = base_dir / "kangmas_shop.db"
+
+# ==== PERBAIKAN DATABASE ====
+# Jika DATABASE_URI tidak ada, gunakan SQLite
+if not os.getenv('DATABASE_URI'):
+    os.environ['DATABASE_URI'] = f'sqlite:///{db_path}'
+    print(f"✅ Database SQLite: {db_path}")
+
+## ===== DATABASE CONFIGURATION FOR RENDER =====
+# ===== DATABASE CONFIGURATION FOR RENDER =====
 import os
-from urllib.parse import urlparse
 
-# Hardcode Supabase connection string untuk psycopg3
-DATABASE_URL = "postgresql+psycopg://postgres:TugasSiaKangMas@db.lwbauezkfxryqdbtdjfq.supabase.co:5432/postgres"
+# Konfigurasi database untuk Render
+DATABASE_URL = os.environ.get('DATABASE_URL')
 
-print(f"✅ Menggunakan Supabase PostgreSQL dengan psycopg3")
-print(f"📊 Database host: db.lwbauezkfxryqdbtdjfq.supabase.co")
-
-# Set database URI dengan prefix yang benar untuk psycopg3
-app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+if DATABASE_URL:
+    print("✅ DATABASE_URL terdeteksi dari environment")
+    
+    # Konversi URL untuk menggunakan psycopg3 (psycopg[binary]) driver
+    # psycopg3 menggunakan prefix "postgresql+psycopg://"
+    if DATABASE_URL.startswith('postgres://'):
+        DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql+psycopg://', 1)
+    elif DATABASE_URL.startswith('postgresql://'):
+        DATABASE_URL = DATABASE_URL.replace('postgresql://', 'postgresql+psycopg://', 1)
+    
+    app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+    print("✅ Menggunakan PostgreSQL dengan driver psycopg3 (psycopg[binary])")
+    
+else:
+    # Untuk development lokal
+    base_dir = Path(__file__).parent
+    db_path = base_dir / "kangmas_shop.db"
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+    print(f"✅ Development: Menggunakan SQLite di {db_path}")
 
 # Secret Key
-app.config['SECRET_KEY'] = 'kang-mas-secret-2025-supabase'  # Ganti dengan secret key yang kuat
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'kang-mas-secret-2025')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# Configuration untuk Supabase dengan psycopg3
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_recycle': 300,
     'pool_pre_ping': True,
-    'pool_size': 5,  # Supabase free tier maks 20 connections
-    'max_overflow': 10,
-    'pool_timeout': 30,
-    'connect_args': {
-        'connect_timeout': 10,
-        'keepalives': 1,
-        'keepalives_idle': 30,
-        'keepalives_interval': 10,
-        'keepalives_count': 5,
-        'sslmode': 'require'  # Supabase membutuhkan SSL
-    }
+    'pool_size': 10,  # Tambah untuk PostgreSQL
+    'max_overflow': 20,  # Tambah untuk PostgreSQL
+    'pool_timeout': 30  # Tambah untuk PostgreSQL
 }
 
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
+app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'static/uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-# Hapus bagian SQLite fallback yang lama
-# Hapus baris-baris ini jika ada:
-# base_dir = Path(__file__).parent
-# db_path = base_dir / "kangmas_shop.db"
-# app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+# Ensure upload folders exist
+os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'products'), exist_ok=True)
+os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'logos'), exist_ok=True)
+os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'assets'), exist_ok=True)
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
@@ -511,9 +524,9 @@ TRANSACTION_TEMPLATES = {
         ]
     },
 
-    'kerugian_bibit_mati': {
-        'name': 'Kerugian Bibit Ikan Mati',
-        'description': 'Bibit ikan mati dalam perjalanan/kolam sehingga tidak dapat dijual',
+    'kerugian_bibit_ikan': {
+        'name': 'Kerugian Bibit Ikan',
+        'description': 'Kerugian Bibit ikan',
         'entries': [
             {'account_type': 'beban_kerugian', 'side': 'debit', 'description': 'Beban kerugian bibit mati'},
             {'account_type': 'persediaan', 'side': 'credit', 'description': 'Pengurangan persediaan bibit'}
@@ -524,34 +537,6 @@ TRANSACTION_TEMPLATES = {
             {'name': 'unit_cost', 'label': 'Harga Cost per Unit', 'type': 'number', 'required': True, 'default': 1000}
         ]
     },
-
-    'hibah_bibit_ke_keluarga': {
-        'name': 'Bibit Diberikan ke Saudara (Kerugian)',
-        'description': 'Bibit diambil oleh keluarga pemilik, dianggap kerugian usaha',
-        'entries': [
-            {'account_type': 'beban_kerugian', 'side': 'debit', 'description': 'Kerugian hibah bibit'},
-            {'account_type': 'persediaan', 'side': 'credit', 'description': 'Pengurangan persediaan bibit'}
-        ],
-        'inventory_effect': {'type': 'bibit', 'action': 'out'},
-        'inputs': [  # TAMBAHKAN INPUT QUANTITY
-            {'name': 'quantity', 'label': 'Jumlah Bibit yang Diberikan (ekor)', 'type': 'number', 'required': True},
-            {'name': 'unit_cost', 'label': 'Harga Cost per Unit', 'type': 'number', 'required': True, 'default': 1000}
-        ]
-    },
-
-    'kerugian_bibit_mati_lanjutan': {
-        'name': 'Kerugian Bibit Mati Lanjutan',
-        'description': 'Bibit mati secara alami di kolam',
-        'entries': [
-            {'account_type': 'beban_kerugian', 'side': 'debit', 'description': 'Beban kerugian bibit mati'},
-            {'account_type': 'persediaan', 'side': 'credit', 'description': 'Pengurangan persediaan bibit'}
-        ],
-        'inventory_effect': {'type': 'bibit', 'action': 'out'},
-        'inputs': [  # TAMBAHKAN INPUT QUANTITY
-            {'name': 'quantity', 'label': 'Jumlah Bibit yang Mati (ekor)', 'type': 'number', 'required': True},
-            {'name': 'unit_cost', 'label': 'Harga Cost per Unit', 'type': 'number', 'required': True, 'default': 1000}
-        ]
-    }
 }
 
 # ===== TEMPLATE JURNAL PENYESUAIAN BARU =====
@@ -1546,7 +1531,7 @@ def create_purchase_journal(order):
 
 # ===== FUNGSI BUKU BESAR =====
 def get_ledger_data():
-    """Ambil data untuk buku besar - termasuk jurnal penjualan"""
+    """Ambil data untuk buku besar - MENGGUNAKAN SALDO AWAL DARI DATABASE"""
     try:
         # Dapatkan semua akun
         all_accounts = Account.query.order_by(Account.code).all()
@@ -1554,29 +1539,40 @@ def get_ledger_data():
         ledger_html = ""
 
         for account in all_accounts:
-            # Hitung saldo awal (sama dengan neraca saldo)
-            opening_balance = 0
-            if account.type == 'kas':
-                opening_balance = 10000000
-            elif account.type == 'persediaan':
-                opening_balance = 5000000
-            elif account.type == 'perlengkapan':
-                opening_balance = 6500000
-            elif account.type == 'peralatan':
-                opening_balance = 5000000
-            elif account.type == 'hutang':
-                opening_balance = 26500000
-            elif account.type == 'pendapatan':
-                opening_balance = 0
+            # ✅✅✅ BENAR: Hitung saldo awal REAL dari database
+            
+            # Langkah 1: Mulai dari saldo awal di database
+            saldo_awal_murni = account.balance  # Ini dari form edit saldo awal
+            
+            # Langkah 2: KURANGI efek dari SEMUA transaksi jurnal
+            # (karena account.balance sudah termasuk semua jurnal)
+            semua_jurnal = JournalDetail.query.filter_by(account_id=account.id).all()
+            
+            total_efek_jurnal = 0
+            for detail in semua_jurnal:
+                if account.category in ['asset', 'expense']:
+                    # Asset/Expense: Debit (+), Credit (-)
+                    total_efek_jurnal += detail.debit - detail.credit
+                else:
+                    # Liability/Equity/Revenue: Credit (+), Debit (-)
+                    total_efek_jurnal += detail.credit - detail.debit
+            
+            # Saldo awal murni = Saldo sekarang - efek semua jurnal
+            opening_balance = saldo_awal_murni - total_efek_jurnal
+            
+            # Debug info
+            print(f"📊 [LEDGER] {account.code} - {account.name}:")
+            print(f"   Saldo database: {saldo_awal_murni:,.0f}")
+            print(f"   Total efek jurnal: {total_efek_jurnal:,.0f}")
+            print(f"   Saldo awal murni: {opening_balance:,.0f}")
 
-            # PERBAIKAN: Ambil SEMUA transaksi jurnal termasuk 'sales'
+            # Hanya tampilkan akun yang punya saldo atau transaksi
             journal_details = JournalDetail.query.join(JournalEntry).filter(
                 JournalDetail.account_id == account.id,
                 JournalEntry.journal_type.in_(['general', 'sales', 'purchase', 'hpp', 'adjustment'])
             ).order_by(JournalEntry.date, JournalDetail.id).all()
 
-            # Hanya tampilkan akun yang punya saldo atau transaksi
-            if abs(opening_balance) > 0 or journal_details:
+            if abs(opening_balance) > 0.01 or journal_details:  # Toleransi kecil
                 account_html = f'''
                 <div class="card" style="margin-bottom: 2rem;">
                     <h4 style="color: var(--primary); margin-bottom: 1rem;">
@@ -1605,8 +1601,8 @@ def get_ledger_data():
                     # Tambahkan baris saldo awal
                     account_html += f'''
                     <tr style="background: rgba(49, 130, 206, 0.05);">
-                        <td>01/01/2025</td>
-                        <td><strong>Saldo Awal</strong></td>
+                        <td>Saldo Awal</td>
+                        <td><strong>Saldo Awal Periode</strong></td>
                         <td></td>
                         <td></td>
                         <td class="{'debit' if running_balance >= 0 else 'credit'}">Rp {abs(running_balance):,.0f}</td>
@@ -1638,7 +1634,13 @@ def get_ledger_data():
                     </div>
                     '''
                 else:
-                    account_html += f'<p>Saldo: <span class="{"debit" if opening_balance >= 0 else "credit"}">Rp {abs(opening_balance):,.0f}</span></p>'
+                    # Jika tidak ada transaksi, tampilkan saldo awal saja
+                    if abs(opening_balance) > 0.01:
+                        account_html += f'''
+                        <p>Saldo Awal: <span class="{'debit' if opening_balance >= 0 else 'credit'}">
+                            Rp {abs(opening_balance):,.0f}
+                        </span></p>
+                        '''
 
                 account_html += '</div>'
                 ledger_html += account_html
@@ -1647,6 +1649,8 @@ def get_ledger_data():
 
     except Exception as e:
         print(f"Error generating ledger data: {e}")
+        import traceback
+        traceback.print_exc()
         return '<div class="card"><p>Error loading ledger data.</p></div>'
 
 # ===== FUNGSI KARTU PERSEDIAAN BARU =====
@@ -2109,54 +2113,67 @@ def get_initial_balances():
         return {}
 
 def get_saldo_awal_html():
-    """Generate HTML untuk saldo awal MURNI tanpa pengaruh jurnal umum"""
+    """Generate HTML untuk saldo awal MURNI - HANYA SALDO AWAL dari database, TANPA efek jurnal"""
     try:
-        accounts = Account.query.order_by(Account.code).all()
+        # PERBAIKAN: Ambil semua akun REAL (Aset, Kewajiban, Ekuitas)
+        accounts = Account.query.filter(
+            Account.category.in_(['asset', 'liability', 'equity'])
+        ).order_by(Account.code).all()
 
         saldo_html = ""
         total_debit = 0
         total_credit = 0
 
         for account in accounts:
-            # SALDO AWAL MURNI - tidak dipengaruhi jurnal umum
-            saldo_awal = 0
-
-            # Tentukan saldo awal berdasarkan akun
-            if account.type == 'kas':
-                saldo_awal = 10000000  # Debit
-            elif account.type == 'persediaan':
-                saldo_awal = 5000000   # Debit
-            elif account.type == 'perlengkapan':
-                saldo_awal = 6500000   # Debit
-            elif account.type == 'peralatan':
-                saldo_awal = 5000000   # Debit
-            elif account.type == 'hutang':
-                saldo_awal = 26500000  # Credit
-            elif account.type == 'pendapatan':
-                saldo_awal = 0         # Credit
-            else:
-                saldo_awal = 0
-
-            # Skip akun yang saldo awal 0
-            if saldo_awal == 0:
+            # ===== PERBAIKAN UTAMA =====
+            # SALDO AWAL MURNI = saldo database MINUS efek SEMUA jurnal (umum + penyesuaian)
+            # karena di database, account.balance sudah termasuk efek semua transaksi
+            
+            # 1. Ambil saldo dari database (sudah termasuk semua efek transaksi)
+            saldo_database = account.balance
+            
+            # 2. Hitung total efek dari SEMUA jurnal (umum + penyesuaian)
+            semua_detail = JournalDetail.query.filter_by(account_id=account.id).all()
+            
+            total_efek_jurnal = 0
+            for detail in semua_detail:
+                if account.category in ['asset', 'expense']:
+                    # Asset/Expense: Debit (+), Credit (-)
+                    total_efek_jurnal += detail.debit - detail.credit
+                else:
+                    # Liability/Equity/Revenue: Credit (+), Debit (-)
+                    total_efek_jurnal += detail.credit - detail.debit
+            
+            # 3. Saldo awal murni = Saldo database - efek semua jurnal
+            # Karena saldo database sudah termasuk efek jurnal, kita KURANGI efeknya
+            # untuk mendapatkan saldo awal asli
+            saldo_awal_murni = saldo_database - total_efek_jurnal
+            
+            print(f"🔍 [SALDO AWAL MURNI] {account.code} - {account.name}:")
+            print(f"   Saldo database: {saldo_database:,.0f}")
+            print(f"   Total efek jurnal: {total_efek_jurnal:,.0f}")
+            print(f"   Saldo awal murni: {saldo_awal_murni:,.0f}")
+            
+            # Skip akun yang saldo 0
+            if abs(saldo_awal_murni) < 0.01:
                 continue
 
             # Tentukan debit/credit berdasarkan kategori akun
-            if account.category in ['asset', 'expense']:
-                # Asset/Expense: Saldo positif = Debit
-                if saldo_awal >= 0:
-                    debit = saldo_awal
+            if account.category in ['asset']:
+                # Asset: Saldo positif = Debit
+                if saldo_awal_murni >= 0:
+                    debit = saldo_awal_murni
                     credit = 0
                 else:
                     debit = 0
-                    credit = abs(saldo_awal)
+                    credit = abs(saldo_awal_murni)
             else:
-                # Liability/Equity/Revenue: Saldo positif = Credit
-                if saldo_awal >= 0:
+                # Liability & Equity: Saldo positif = Credit
+                if saldo_awal_murni >= 0:
                     debit = 0
-                    credit = saldo_awal
+                    credit = saldo_awal_murni
                 else:
-                    debit = abs(saldo_awal)
+                    debit = abs(saldo_awal_murni)
                     credit = 0
 
             total_debit += debit
@@ -2171,7 +2188,7 @@ def get_saldo_awal_html():
             </tr>
             '''
 
-        is_balanced = total_debit == total_credit
+        is_balanced = abs(total_debit - total_credit) < 0.01
 
         saldo_html += f'''
         <tr style="font-weight: bold; border-top: 2px solid var(--primary); background: rgba(56, 161, 105, 0.1);">
@@ -2186,11 +2203,25 @@ def get_saldo_awal_html():
         </tr>
         '''
 
+        # Tambahkan info tentang akun nominal
+        saldo_html += f'''
+        <tr style="background: rgba(156, 163, 175, 0.1);">
+            <td colspan="4" style="text-align: center; color: #6B7280; font-size: 0.9rem; padding: 0.5rem;">
+                <i class="fas fa-info-circle"></i> 
+                <strong>Catatan:</strong> 
+                Saldo awal murni dari database, TANPA efek jurnal umum & penyesuaian. 
+                Pendapatan & Beban tidak memiliki saldo awal (selalu 0).
+            </td>
+        </tr>
+        '''
+
         return saldo_html
 
     except Exception as e:
-        print(f"Error generating saldo awal: {e}")
-        return '<tr><td colspan="4">Error loading saldo awal</td></tr>'
+        print(f"❌ Error generating saldo awal murni: {e}")
+        import traceback
+        traceback.print_exc()
+        return '<tr><td colspan="4">Error loading saldo awal murni</td></tr>'
 
 def get_equity_change_statement():
     """Generate Laporan Perubahan Ekuitas HTML"""
@@ -2263,42 +2294,28 @@ def get_equity_change_statement():
 
 # ===== FUNGSI JURNAL PENYESUAIAN BARU =====
 def get_account_balance_before_adjustment(account_type):
-    """Mendapatkan saldo akun dari NERACA SALDO SEBELUM PENYESUAIAN (sama dengan buku besar)"""
+    """Mendapatkan saldo akun dari NERACA SALDO SEBELUM PENYESUAIAN"""
     try:
         account = Account.query.filter_by(type=account_type).first()
         if not account:
             return 0
 
-        # Hitung saldo dari buku besar (saldo awal + semua jurnal umum)
-        saldo_buku_besar = 0
+        # ✅ PERBAIKAN: Mulai dari saldo database
+        saldo_buku_besar = account.balance  # Ambil dari database
 
-        # 1. Saldo awal YANG DIPERBAIKI
-        if account.type == 'kas':
-            saldo_buku_besar = 10000000  # Debit
-        elif account.type == 'persediaan':
-            saldo_buku_besar = 5000000   # Debit
-        elif account.type == 'perlengkapan':
-            saldo_buku_besar = 6500000   # Debit
-        elif account.type == 'peralatan':
-            saldo_buku_besar = 5000000   # Debit
-        elif account.type == 'hutang':
-            saldo_buku_besar = 26500000  # Credit - DIPERBAIKI dari 20jt menjadi 26.5jt
-        elif account.type == 'pendapatan':
-            saldo_buku_besar = 0         # Credit - DIPERBAIKI dari 6.5jt menjadi 0
-
-        # 2. Tambahkan efek dari jurnal umum (type = 'general')
-        general_journals = JournalDetail.query.join(JournalEntry).filter(
+        # KURANGI efek dari jurnal penyesuaian
+        adjustment_details = JournalDetail.query.join(JournalEntry).filter(
             JournalDetail.account_id == account.id,
-            JournalEntry.journal_type == 'general'
+            JournalEntry.journal_type == 'adjustment'
         ).all()
 
-        for detail in general_journals:
+        for detail in adjustment_details:
             if account.category in ['asset', 'expense']:
                 # Asset/Expense: Debit menambah, Credit mengurangi
-                saldo_buku_besar += detail.debit - detail.credit
+                saldo_buku_besar -= (detail.debit - detail.credit)
             else:
                 # Liability/Equity/Revenue: Credit menambah, Debit mengurangi
-                saldo_buku_besar += detail.credit - detail.debit
+                saldo_buku_besar -= (detail.credit - detail.debit)
 
         return saldo_buku_besar
 
@@ -3281,7 +3298,7 @@ def get_post_closing_trial_balance():
         return f'<div class="card"><p>Error loading post-closing trial balance: {str(e)}</p></div>'
 
 def get_proper_closing_entries_html():
-    """Generate HTML untuk jurnal penutup dengan format yang benar - DIPERBAIKI"""
+    """Generate HTML untuk jurnal penutup dengan format baru - DESKRIPSI DI HEADER"""
     try:
         # CARI DARI JournalEntry, bukan ClosingEntry
         closing_journals = JournalEntry.query.filter(
@@ -3350,19 +3367,23 @@ def get_proper_closing_entries_html():
                 transactions[base_number] = []
             transactions[base_number].append(journal)
 
-        table_html = '''
+        table_html = f'''
         <div class="card">
             <h4 style="color: var(--primary); margin-bottom: 1.5rem;">
                 <i class="fas fa-door-closed"></i> Jurnal Penutup
+                <span style="font-size: 0.9rem; color: #6B7280; font-weight: normal; margin-left: 1rem;">
+                    ({len(closing_journals)} entri penutup)
+                </span>
             </h4>
+            
             <div style="overflow-x: auto;">
                 <table class="table">
                     <thead>
                         <tr>
                             <th>Tanggal</th>
                             <th>No. Transaksi</th>
-                            <th>Keterangan</th>
                             <th>Akun</th>
+                            <th>Ref</th>
                             <th>Debit</th>
                             <th>Kredit</th>
                         </tr>
@@ -3382,46 +3403,73 @@ def get_proper_closing_entries_html():
                     grouped_journals[journal.id] = journal
             
             for journal in grouped_journals.values():
-                # Add journal header
+                # Add journal header - DESKRIPSI DI HEADER
                 table_html += f'''
-                <tr style="background: rgba(180, 81, 35, 0.05);">
-                    <td><strong>{journal.date.strftime('%d/%m/%Y')}</strong></td>
-                    <td><strong>{journal.transaction_number}</strong></td>
-                    <td colspan="4"><strong>{journal.description}</strong></td>
+                <tr style="background: rgba(180, 81, 35, 0.1); font-weight: bold;">
+                    <td>{journal.date.strftime('%d/%m/%Y %H:%M')}</td>
+                    <td>{journal.transaction_number}</td>
+                    <td colspan="4" style="color: var(--primary);">
+                        {journal.description}
+                    </td>
                 </tr>
                 '''
                 
-                # Add account details
+                # Add account details - TANPA DESKRIPSI
                 for detail in journal.journal_details:
-                    account = Account.query.get(detail.account_id)
-                    account_name = account.name if account else "Unknown"
-                    account_code = account.code if account else ""
-                    
                     table_html += f'''
                     <tr>
+                        <td style="border-left: 3px solid rgba(180, 81, 35, 0.3);"></td>
                         <td></td>
-                        <td></td>
-                        <td></td>
-                        <td>{account_code} - {account_name}</td>
+                        <td>{detail.account.name}</td>
+                        <td>{detail.account.code}</td>
                         <td class="debit">{"Rp {0:,.0f}".format(detail.debit) if detail.debit > 0 else ""}</td>
                         <td class="credit">{"Rp {0:,.0f}".format(detail.credit) if detail.credit > 0 else ""}</td>
                     </tr>
                     '''
+                
+                # Total per jurnal
+                total_debit = sum(d.debit for d in journal.journal_details)
+                total_credit = sum(d.credit for d in journal.journal_details)
+                
+                table_html += f'''
+                <tr style="background: rgba(180, 81, 35, 0.05);">
+                    <td colspan="4" style="text-align: right; font-weight: bold; padding: 0.5rem 1rem; border-top: 1px solid rgba(180, 81, 35, 0.1);">
+                        Total:
+                    </td>
+                    <td class="debit" style="font-weight: bold; border-top: 1px solid rgba(180, 81, 35, 0.1);">Rp {total_debit:,.0f}</td>
+                    <td class="credit" style="font-weight: bold; border-top: 1px solid rgba(180, 81, 35, 0.1);">Rp {total_credit:,.0f}</td>
+                </tr>
+                <tr><td colspan="6" style="height: 1rem; background: transparent;"></td></tr>
+                '''
 
         table_html += '''
                     </tbody>
                 </table>
             </div>
+            
+            <!-- Button untuk membuat jurnal penutup baru -->
+            <div style="margin-top: 2rem; text-align: center;">
+                <button class="btn btn-success" onclick="createClosingEntries()" 
+                        style="padding: 1rem 2rem; font-size: 1.1rem;">
+                    <i class="fas fa-calculator"></i> Buat Jurnal Penutup Baru
+                </button>
+                
+                <div style="margin-top: 1rem; color: #6B7280; font-size: 0.9rem;">
+                    <i class="fas fa-info-circle"></i> Jurnal penutup akan menutup semua akun pendapatan dan beban, 
+                    menghitung laba/rugi, dan memindahkannya ke akun Modal.
+                </div>
+            </div>
         </div>
         '''
 
         return table_html
+        
     except Exception as e:
         print(f"Error generating closing entries: {e}")
         return '<div class="card"><p>Error loading closing entries</p></div>'
 
 def get_adjustment_account_balances():
-    """Mendapatkan saldo akun untuk ditampilkan di form penyesuaian"""
+    """Mendapatkan saldo akun untuk ditampilkan di form penyesuaian - DARI DATABASE"""
     return {
         'perlengkapan': get_account_balance_before_adjustment('perlengkapan'),
         'peralatan': get_account_balance_before_adjustment('peralatan'),
@@ -5117,6 +5165,159 @@ Mohon dipersiapkan pesanannya ya. Terima kasih! 😊`;
                 }});
         }}
 
+        function resetBalances() {{
+            const confirmMessage = '⚠️ PERINGATAN: RESET SALDO AWAL\\n\\n' +
+                                 'Tindakan ini akan:\\n' +
+                                 '1. Mengembalikan SEMUA saldo akun ke nilai default\\n' +
+                                 '2. Mengatur ulang stok produk ke nilai awal\\n' +
+                                 '3. TIDAK menghapus transaksi jurnal yang sudah ada\\n' +
+                                 '4. Membutuhkan penyesuaian manual setelah reset\\n\\n' +
+                                 'Apakah Anda yakin ingin mereset semua saldo ke default?';
+            
+            if (!confirm(confirmMessage)) {{
+                return;
+            }}
+            
+            // Tampilkan konfirmasi kedua
+            const secondConfirm = '🔄 KONFIRMASI AKHIR\\n\\n' +
+                                'Reset saldo akan:\\n' +
+                                '• Kas: Rp 10,000,000\\n' +
+                                '• Persediaan: Rp 5,000,000\\n' +
+                                '• Perlengkapan: Rp 6,500,000\\n' +
+                                '• Peralatan: Rp 5,000,000\\n' +
+                                '• Utang: Rp 26,500,000\\n' +
+                                '• Pendapatan: Rp 0\\n\\n' +
+                                'Lanjutkan reset?';
+            
+            if (!confirm(secondConfirm)) {{
+                return;
+            }}
+            
+            const button = event.target;
+            const originalText = button.innerHTML;
+
+            button.innerHTML = '<div class="loading"></div> Resetting...';
+            button.disabled = true;
+
+            fetch('/seller/reset_balances', {{
+                method: 'POST',
+                headers: {{
+                    'Content-Type': 'application/json',
+                }},
+                body: JSON.stringify({{ confirm: true }})
+            }})
+            .then(response => response.json())
+            .then(data => {{
+                if (data.success) {{
+                    showNotification('✅ ' + data.message, 'success');
+                    setTimeout(() => location.reload(), 2000);
+                }} else if (data.requires_confirm) {{
+                    // Jika butuh konfirmasi, tampilkan modal konfirmasi
+                    showResetConfirmationModal();
+                }} else {{
+                    showNotification('❌ ' + data.message, 'error');
+                }}
+            }})
+            .catch(error => {{
+                showNotification('❌ Terjadi error saat reset saldo', 'error');
+            }})
+            .finally(() => {{
+                setTimeout(() => {{
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                }}, 2000);
+            }});
+        }}
+
+        // Fungsi untuk menampilkan modal konfirmasi reset
+        function showResetConfirmationModal() {{
+            const modalContent = `
+                <div class="modal-content">
+                    <span class="close" onclick="closeModal('resetConfirmModal')">&times;</span>
+                    <div style="text-align: center;">
+                        <div style="width: 80px; height: 80px; background: linear-gradient(135deg, var(--warning) 0%, #b7791f 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
+                            <i class="fas fa-exclamation-triangle" style="color: white; font-size: 2rem;"></i>
+                        </div>
+                        <h2 style="margin-bottom: 1rem; color: var(--warning);">Konfirmasi Reset</h2>
+                        <p style="margin-bottom: 1rem; color: var(--dark);">
+                            Reset saldo akan mengembalikan semua nilai ke default sistem.
+                        </p>
+                        <div style="text-align: left; background: rgba(229, 62, 62, 0.1); padding: 1rem; border-radius: var(--border-radius); margin: 1rem 0;">
+                            <p style="margin: 0.5rem 0; font-weight: bold; color: var(--error);">
+                                <i class="fas fa-bomb"></i> PERINGATAN:
+                            </p>
+                            <ul style="margin: 0.5rem 0; padding-left: 1.2rem; color: var(--error); font-size: 0.9rem;">
+                                <li>Semua saldo akun akan diubah</li>
+                                <li>Stok produk akan disesuaikan</li>
+                                <li>Transaksi yang sudah ada TIDAK akan dihapus</li>
+                                <li>Pastikan sudah backup data penting</li>
+                            </ul>
+                        </div>
+                        <p style="color: var(--dark); opacity: 0.7; font-size: 0.9rem; margin-bottom: 2rem;">
+                            Masukkan kata "RESET" untuk mengkonfirmasi:
+                        </p>
+                        <input type="text" id="resetConfirmInput" class="form-control" 
+                               placeholder="Ketik RESET di sini" style="margin-bottom: 1rem;">
+                    </div>
+
+                    <div class="modal-buttons">
+                        <button class="btn btn-danger" onclick="confirmReset()" 
+                                style="width: 100%;" id="confirmResetBtn" disabled>
+                            <i class="fas fa-bomb"></i>
+                            Konfirmasi Reset
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            // Create modal
+            let modal = document.createElement('div');
+            modal.id = 'resetConfirmModal';
+            modal.className = 'modal';
+            modal.innerHTML = modalContent;
+            document.body.appendChild(modal);
+            modal.style.display = 'block';
+
+            // Add input validation
+            document.getElementById('resetConfirmInput').addEventListener('input', function() {{
+                const confirmBtn = document.getElementById('confirmResetBtn');
+                confirmBtn.disabled = this.value.toUpperCase() !== 'RESET';
+            }});
+        }}
+
+        function confirmReset() {{
+            const button = document.getElementById('confirmResetBtn');
+            const originalText = button.innerHTML;
+
+            button.innerHTML = '<div class="loading"></div> Resetting...';
+            button.disabled = true;
+
+            fetch('/seller/reset_balances', {{
+                method: 'POST',
+                headers: {{
+                    'Content-Type': 'application/json',
+                }},
+                body: JSON.stringify({{ confirm: true }})
+            }})
+            .then(response => response.json())
+            .then(data => {{
+                if (data.success) {{
+                    closeModal('resetConfirmModal');
+                    showNotification('✅ ' + data.message, 'success');
+                    setTimeout(() => location.reload(), 1500);
+                }} else {{
+                    showNotification('❌ ' + data.message, 'error');
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                }}
+            }})
+            .catch(error => {{
+                showNotification('❌ Terjadi error saat reset saldo', 'error');
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }});
+        }}
+
         function updateTracking(orderId, status) {{
             fetch('/update_tracking/' + orderId, {{
                 method: 'POST',
@@ -5518,48 +5719,38 @@ def get_account_options():
     return options
 
 def get_trial_balance_before_adjustment():
-    """Neraca saldo sebelum penyesuaian = Saldo dari database TANPA efek jurnal penyesuaian"""
+    """Neraca saldo sebelum penyesuaian - MENGGUNAKAN SALDO AWAL REAL dari database"""
     try:
         accounts = Account.query.order_by(Account.code).all()
         trial_balance_html = ""
         total_debit = total_credit = 0
 
         for account in accounts:
-            # Hitung saldo TANPA jurnal penyesuaian
-            saldo_sebelum_penyesuaian = 0
-
-            # 1. Saldo awal
-            if account.type == 'kas':
-                saldo_sebelum_penyesuaian = 10000000  # Debit
-            elif account.type == 'persediaan':
-                saldo_sebelum_penyesuaian = 5000000   # Debit
-            elif account.type == 'perlengkapan':
-                saldo_sebelum_penyesuaian = 6500000   # Debit
-            elif account.type == 'peralatan':
-                saldo_sebelum_penyesuaian = 5000000   # Debit
-            elif account.type == 'hutang':
-                saldo_sebelum_penyesuaian = 26500000  # Credit
-            elif account.type == 'pendapatan':
-                saldo_sebelum_penyesuaian = 0         # Credit
-            else:
-                saldo_sebelum_penyesuaian = 0
-
-            # 2. Tambahkan efek dari jurnal umum (type = 'general', 'sales', 'purchase', 'hpp') TANPA 'adjustment'
-            general_journals = JournalDetail.query.join(JournalEntry).filter(
+            # ✅✅✅ PERBAIKAN: HITUNG SALDO SEBELUM PENYESUAIAN DARI DATABASE
+            
+            # Langkah 1: Mulai dari saldo awal di database
+            saldo_awal_murni = account.balance  # Saldo awal dari form edit
+            
+            # Langkah 2: KURANGI efek dari jurnal penyesuaian (karena ini "sebelum" penyesuaian)
+            adjustment_details = JournalDetail.query.join(JournalEntry).filter(
                 JournalDetail.account_id == account.id,
-                JournalEntry.journal_type.in_(['general', 'sales', 'purchase', 'hpp'])
+                JournalEntry.journal_type == 'adjustment'
             ).all()
-
-            for detail in general_journals:
+            
+            efek_penyesuaian = 0
+            for detail in adjustment_details:
                 if account.category in ['asset', 'expense']:
                     # Asset/Expense: Debit menambah, Credit mengurangi
-                    saldo_sebelum_penyesuaian += detail.debit - detail.credit
+                    efek_penyesuaian += detail.debit - detail.credit
                 else:
                     # Liability/Equity/Revenue: Credit menambah, Debit mengurangi
-                    saldo_sebelum_penyesuaian += detail.credit - detail.debit
-
+                    efek_penyesuaian += detail.credit - detail.debit
+            
+            # Saldo sebelum penyesuaian = Saldo sekarang - efek penyesuaian
+            saldo_sebelum_penyesuaian = saldo_awal_murni - efek_penyesuaian
+            
             # Skip akun yang saldo 0
-            if saldo_sebelum_penyesuaian == 0:
+            if abs(saldo_sebelum_penyesuaian) < 0.01:  # Toleransi kecil
                 continue
 
             # Tentukan posisi di neraca saldo
@@ -5590,7 +5781,7 @@ def get_trial_balance_before_adjustment():
             </tr>
             '''
 
-        is_balanced = total_debit == total_credit
+        is_balanced = abs(total_debit - total_credit) < 0.01  # Toleransi kecil
 
         trial_balance_html += f'''
         <tr style="font-weight: bold; border-top: 2px solid var(--primary); background: rgba(56, 161, 105, 0.1);">
@@ -5609,6 +5800,8 @@ def get_trial_balance_before_adjustment():
 
     except Exception as e:
         print(f"Error generating trial balance before adjustment: {e}")
+        import traceback
+        traceback.print_exc()
         return '<tr><td colspan="4">Error loading trial balance</td></tr>'
 
 def get_trial_balance_after_adjustment():
@@ -5734,7 +5927,7 @@ def get_adjusted_trial_balance():
         return '<tr><td colspan="4">Error loading adjusted trial balance</td></tr>'
 
 def get_general_journal_entries():
-    """Tampilkan jurnal umum DAN jurnal penjualan dengan TOTAL KESELURUHAN"""
+    """Tampilkan jurnal umum dengan format baru - DESKRIPSI DI HEADER"""
     try:
         journal_entries = JournalEntry.query.filter(
             JournalEntry.journal_type.in_(['general', 'sales', 'purchase', 'hpp'])
@@ -5800,9 +5993,10 @@ def get_general_journal_entries():
                         <tr>
                             <th>Tanggal</th>
                             <th>No. Transaksi</th>
-                            <th>Tipe</th>
-                            <th>Keterangan</th>
-                            <th>Detail Akun</th>
+                            <th>Akun</th>
+                            <th>Ref</th>
+                            <th>Debit</th>
+                            <th>Kredit</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -5811,117 +6005,73 @@ def get_general_journal_entries():
         current_date = None
         
         for journal in journal_entries:
-            # Tampilkan header tanggal jika berbeda
+            # HEADER TRANSAKSI - TANGGAL, NO TRANSAKSI, DESKRIPSI
             journal_date = journal.date.strftime('%d/%m/%Y')
-            if journal_date != current_date:
-                table_html += f'''
-                <tr style="background: rgba(49, 130, 206, 0.1);">
-                    <td colspan="5" style="font-weight: bold; padding: 1rem;">
-                        <i class="fas fa-calendar-alt"></i> {journal_date}
-                    </td>
-                </tr>
-                '''
-                current_date = journal_date
             
-            # Tipe jurnal untuk identifikasi
-            type_badge = ""
-            if journal.journal_type == 'sales':
-                type_badge = '<span class="badge" style="background: var(--success);">Penjualan</span>'
-            elif journal.journal_type == 'purchase':
-                type_badge = '<span class="badge" style="background: var(--primary);">Pembelian</span>'
-            elif journal.journal_type == 'hpp':
-                type_badge = '<span class="badge" style="background: var(--warning);">HPP</span>'
-            else:
-                type_badge = '<span class="badge" style="background: var(--info);">Umum</span>'
-
-            # Hitung total per jurnal
-            total_debit = sum(d.debit for d in journal.journal_details)
-            total_credit = sum(d.credit for d in journal.journal_details)
-            
-            # Add transaction header
+            # Header dengan deskripsi
             table_html += f'''
-            <tr style="background: rgba(49, 130, 206, 0.05);">
-                <td><strong>{journal.date.strftime('%H:%M')}</strong></td>
-                <td><strong>{journal.transaction_number}</strong></td>
-                <td>{type_badge}</td>
-                <td colspan="2"><strong>{journal.description}</strong></td>
+            <tr style="background: rgba(49, 130, 206, 0.1); font-weight: bold;">
+                <td>{journal.date.strftime('%d/%m/%Y %H:%M')}</td>
+                <td>{journal.transaction_number}</td>
+                <td colspan="4" style="color: var(--primary);">
+                    {journal.description}
+                </td>
             </tr>
             '''
 
-            # Add account details
+            # DETAIL AKUN - TANPA DESKRIPSI LAGI
             for detail in journal.journal_details:
-                # Tentukan nominal
-                amount = detail.debit if detail.debit > 0 else detail.credit
-                amount_class = "debit" if detail.debit > 0 else "credit"
+                # Tentukan nominal dan kelas
+                if detail.debit > 0:
+                    debit_amount = detail.debit
+                    credit_amount = ""
+                    amount_class = "debit"
+                else:
+                    debit_amount = ""
+                    credit_amount = detail.credit
+                    amount_class = "credit"
                 
                 table_html += f'''
                 <tr>
+                    <td style="border-left: 3px solid rgba(49, 130, 206, 0.3);"></td>
                     <td></td>
-                    <td></td>
-                    <td></td>
-                    <td style="padding-left: 1rem; font-size: 0.9rem;">
-                        {detail.account.code} - {detail.account.name}
-                        <br>
-                        <small style="color: #6B7280; font-size: 0.85rem;">
-                            {detail.description}
-                        </small>
-                    </td>
-                    <td style="text-align: right;">
-                        <span class="{amount_class}" style="font-weight: bold;">Rp {amount:,.0f}</span>
-                    </td>
+                    <td>{detail.account.name}</td>
+                    <td>{detail.account.code}</td>
+                    <td class="debit">{"Rp {0:,.0f}".format(detail.debit) if detail.debit > 0 else ""}</td>
+                    <td class="credit">{"Rp {0:,.0f}".format(detail.credit) if detail.credit > 0 else ""}</td>
                 </tr>
                 '''
 
-            # Total per jurnal
+            # TOTAL PER JURNAL
+            total_debit = sum(d.debit for d in journal.journal_details)
+            total_credit = sum(d.credit for d in journal.journal_details)
+            
             table_html += f'''
             <tr style="background: rgba(0,0,0,0.02);">
-                <td colspan="4" style="text-align: right; font-weight: bold; padding: 0.5rem 1rem;">
-                    Total Jurnal Ini:
+                <td colspan="4" style="text-align: right; font-weight: bold; padding: 0.5rem 1rem; border-top: 1px solid rgba(0,0,0,0.1);">
+                    Total Jurnal:
                 </td>
-                <td style="padding: 0.5rem 1rem;">
-                    <div style="display: flex; justify-content: space-between;">
-                        <span class="debit" style="font-size: 0.9rem;">Rp {total_debit:,.0f}</span>
-                        <span style="margin: 0 0.5rem;">=</span>
-                        <span class="credit" style="font-size: 0.9rem;">Rp {total_credit:,.0f}</span>
-                    </div>
-                </td>
+                <td class="debit" style="font-weight: bold; border-top: 1px solid rgba(0,0,0,0.1);">Rp {total_debit:,.0f}</td>
+                <td class="credit" style="font-weight: bold; border-top: 1px solid rgba(0,0,0,0.1);">Rp {total_credit:,.0f}</td>
             </tr>
-            <tr><td colspan="5" style="padding: 0.25rem;"></td></tr>
+            <tr><td colspan="6" style="height: 1rem; background: transparent;"></td></tr>
             '''
 
         table_html += '''
                     </tbody>
                 </table>
             </div>
-            
-            <!-- Footer Summary -->
-            <div style="margin-top: 1.5rem; padding: 1rem; background: var(--ocean-light); border-radius: var(--border-radius);">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <h5 style="color: var(--primary); margin: 0;"><i class="fas fa-chart-line"></i> Ringkasan Akhir</h5>
-                        <p style="margin: 0.5rem 0 0 0; color: #6B7280; font-size: 0.9rem;">
-                            Keseluruhan {len(journal_entries)} transaksi jurnal umum
-                        </p>
-                    </div>
-                    <div style="text-align: right;">
-                        <div style="font-size: 1.1rem; font-weight: bold;">
-                            <span class="debit">Rp ''' + f'''{total_all_debit:,.0f}</span> = <span class="credit">Rp {total_all_credit:,.0f}</span>
-                        </div>
-                        <div style="font-size: 0.9rem; color: {'var(--success)' if total_all_debit == total_all_credit else 'var(--error)'};">
-                            {'✅ Semua jurnal sudah balance' if total_all_debit == total_all_credit else '❌ Ada ketidakseimbangan'}
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
         '''
+        
         return table_html
+        
     except Exception as e:
         print(f"Error generating general journal entries: {e}")
         return '<div class="card"><p>Error loading journal entries</p></div>'
 
 def get_adjustment_journal_entries():
-    """Tampilkan jurnal penyesuaian dengan TOTAL KESELURUHAN"""
+    """Tampilkan jurnal penyesuaian dengan format baru - DESKRIPSI DI HEADER"""
     try:
         journal_entries = JournalEntry.query.filter_by(journal_type='adjustment').order_by(
             JournalEntry.date.desc(), JournalEntry.id.desc()
@@ -5987,151 +6137,64 @@ def get_adjustment_journal_entries():
                         <tr>
                             <th>Tanggal</th>
                             <th>No. Transaksi</th>
-                            <th>Keterangan</th>
                             <th>Akun</th>
-                            <th>Nominal</th>
+                            <th>Ref</th>
+                            <th>Debit</th>
+                            <th>Kredit</th>
                         </tr>
                     </thead>
                     <tbody>
         '''
-
-        current_date = None
         
         for journal in journal_entries:
-            # Tampilkan header tanggal jika berbeda
-            journal_date = journal.date.strftime('%d/%m/%Y')
-            if journal_date != current_date:
-                table_html += f'''
-                <tr style="background: rgba(56, 161, 105, 0.1);">
-                    <td colspan="5" style="font-weight: bold; padding: 1rem;">
-                        <i class="fas fa-calendar-alt"></i> {journal_date}
-                    </td>
-                </tr>
-                '''
-                current_date = journal_date
-            
-            # Hitung total per jurnal
-            total_debit = sum(d.debit for d in journal.journal_details)
-            total_credit = sum(d.credit for d in journal.journal_details)
-
-            # Add transaction header
+            # HEADER TRANSAKSI - TANGGAL, NO TRANSAKSI, DESKRIPSI
             table_html += f'''
-            <tr style="background: rgba(56, 161, 105, 0.05);">
-                <td><strong>{journal.date.strftime('%H:%M')}</strong></td>
-                <td><strong>{journal.transaction_number}</strong></td>
-                <td colspan="3"><strong>{journal.description}</strong></td>
+            <tr style="background: rgba(56, 161, 105, 0.1); font-weight: bold;">
+                <td>{journal.date.strftime('%d/%m/%Y %H:%M')}</td>
+                <td>{journal.transaction_number}</td>
+                <td colspan="4" style="color: var(--success);">
+                    {journal.description}
+                </td>
             </tr>
             '''
 
-            # Add account details
+            # DETAIL AKUN - TANPA DESKRIPSI LAGI
             for detail in journal.journal_details:
-                # Tentukan nominal
-                amount = detail.debit if detail.debit > 0 else detail.credit
-                amount_class = "debit" if detail.debit > 0 else "credit"
-                
                 table_html += f'''
                 <tr>
+                    <td style="border-left: 3px solid rgba(56, 161, 105, 0.3);"></td>
                     <td></td>
-                    <td></td>
-                    <td style="padding-left: 1rem; font-size: 0.9rem;">
-                        {detail.account.code} - {detail.account.name}
-                        <br>
-                        <small style="color: #6B7280; font-size: 0.85rem;">
-                            {detail.description}
-                        </small>
-                    </td>
-                    <td style="text-align: right;">
-                        <span class="{amount_class}" style="font-weight: bold;">Rp {amount:,.0f}</span>
-                    </td>
+                    <td>{detail.account.name}</td>
+                    <td>{detail.account.code}</td>
+                    <td class="debit">{"Rp {0:,.0f}".format(detail.debit) if detail.debit > 0 else ""}</td>
+                    <td class="credit">{"Rp {0:,.0f}".format(detail.credit) if detail.credit > 0 else ""}</td>
                 </tr>
                 '''
 
-            # Total per jurnal
+            # TOTAL PER JURNAL
+            total_debit = sum(d.debit for d in journal.journal_details)
+            total_credit = sum(d.credit for d in journal.journal_details)
+            
             table_html += f'''
             <tr style="background: rgba(56, 161, 105, 0.03);">
-                <td colspan="3" style="text-align: right; font-weight: bold; padding: 0.5rem 1rem;">
-                    Total Penyesuaian Ini:
+                <td colspan="4" style="text-align: right; font-weight: bold; padding: 0.5rem 1rem; border-top: 1px solid rgba(56, 161, 105, 0.1);">
+                    Total Penyesuaian:
                 </td>
-                <td colspan="2" style="padding: 0.5rem 1rem;">
-                    <div style="display: flex; justify-content: space-between;">
-                        <span class="debit" style="font-size: 0.9rem;">Rp {total_debit:,.0f}</span>
-                        <span style="margin: 0 0.5rem;">=</span>
-                        <span class="credit" style="font-size: 0.9rem;">Rp {total_credit:,.0f}</span>
-                    </div>
-                </td>
+                <td class="debit" style="font-weight: bold; border-top: 1px solid rgba(56, 161, 105, 0.1);">Rp {total_debit:,.0f}</td>
+                <td class="credit" style="font-weight: bold; border-top: 1px solid rgba(56, 161, 105, 0.1);">Rp {total_credit:,.0f}</td>
             </tr>
-            <tr><td colspan="5" style="padding: 0.25rem;"></td></tr>
+            <tr><td colspan="6" style="height: 1rem; background: transparent;"></td></tr>
             '''
 
         table_html += '''
                     </tbody>
                 </table>
             </div>
-            
-            <!-- Summary Statistics -->
-            <div class="grid grid-2" style="margin-top: 1.5rem;">
-                <div style="padding: 1.5rem; background: rgba(56, 161, 105, 0.1); border-radius: var(--border-radius);">
-                    <h5 style="color: var(--success); margin-bottom: 0.5rem;">
-                        <i class="fas fa-chart-bar"></i> Statistik Penyesuaian
-                    </h5>
-                    <p style="margin: 0.5rem 0; font-size: 0.9rem;">
-                        <strong>Jumlah Penyesuaian:</strong> {len(journal_entries)}
-                    </p>
-                    <p style="margin: 0.5rem 0; font-size: 0.9rem;">
-                        <strong>Rata-rata Nilai:</strong> Rp ''' + f'''{(total_all_debit/len(journal_entries)) if journal_entries else 0:,.0f}</span>
-                    </p>
-                    <p style="margin: 0.5rem 0; font-size: 0.9rem;">
-                        <strong>Status Balance:</strong> {"✅ Selaras" if total_all_debit == total_all_credit else "❌ Tidak Selaras"}
-                    </p>
-                </div>
-                
-                <div style="padding: 1.5rem; background: rgba(49, 130, 206, 0.1); border-radius: var(--border-radius);">
-                    <h5 style="color: var(--primary); margin-bottom: 0.5rem;">
-                        <i class="fas fa-percentage"></i> Persentase
-                    </h5>
-                    <p style="margin: 0.5rem 0; font-size: 0.9rem;">
-                        <strong>Debit vs Kredit:</strong>
-                    </p>
-                    <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem;">
-                        <div style="flex: 1; background: rgba(56, 161, 105, 0.3); height: 10px; border-radius: 5px; overflow: hidden;">
-                            <div style="width: 50%; height: 100%; background: var(--success);"></div>
-                        </div>
-                        <div style="font-size: 0.9rem; font-weight: bold;">
-                            50% / 50%
-                        </div>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.85rem;">
-                        <span class="debit">Debit: 50%</span>
-                        <span class="credit">Kredit: 50%</span>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Grand Total Box -->
-            <div style="margin-top: 1.5rem; padding: 1.5rem; background: linear-gradient(135deg, var(--warning) 0%, #b7791f 100%); color: white; border-radius: var(--border-radius);">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <h5 style="margin: 0; color: white;">
-                            <i class="fas fa-crown"></i> GRAND TOTAL JURNAL PENYESUAIAN
-                        </h5>
-                        <p style="margin: 0.5rem 0 0 0; opacity: 0.9; font-size: 0.9rem;">
-                            Keseluruhan nilai semua penyesuaian
-                        </p>
-                    </div>
-                    <div style="text-align: right;">
-                        <div style="font-size: 1.8rem; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-                            Rp ''' + f'''{total_all_debit:,.0f}</span>
-                        </div>
-                        <div style="font-size: 0.9rem; opacity: 0.9; margin-top: 0.25rem;">
-                            (Debit = Kredit)
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
         '''
 
         return table_html
+        
     except Exception as e:
         print(f"Error generating adjustment journal entries: {e}")
         return '<div class="card"><p>Error loading adjustment journal entries</p></div>'
@@ -6270,16 +6333,16 @@ def get_simplified_accounting_content():
     <h1 style="color: var(--primary);"><i class="fas fa-chart-bar"></i> Sistem Akuntansi</h1>
 
     <div class="accounting-tabs">
-        <button class="tab active" onclick="showTab('chart-of-accounts', this)">Chart of Accounts</button>
-        <button class="tab" onclick="showTab('saldo-awal', this)">Saldo Awal</button>
-        <button class="tab" onclick="showTab('jurnal-umum', this)">Jurnal Umum</button>
-        <button class="tab" onclick="showTab('buku-besar', this)">Buku Besar</button>
-        <button class="tab" onclick="showTab('neraca-saldo', this)">Neraca Saldo</button>
-        <button class="tab" onclick="showTab('jurnal-penyesuaian', this)">Jurnal Penyesuaian</button>
-        <button class="tab" onclick="showTab('neraca-saldo-setelah', this)">Neraca Setelah Penyesuaian</button>
-        <button class="tab" onclick="showTab('laporan-keuangan', this)">Laporan Keuangan</button>
-        <button class="tab" onclick="showTab('jurnal-penutup', this)">Jurnal Penutup</button>
-        <button class="tab" onclick="showTab('neraca-saldo-penutupan', this)">Neraca Saldo Setelah Penutupan</button>
+        <button class="tab active" onclick="showTab(\'chart-of-accounts\', this)">Chart of Accounts</button>
+        <button class="tab" onclick="showTab(\'saldo-awal\', this)">Saldo Awal</button>
+        <button class="tab" onclick="showTab(\'jurnal-umum\', this)">Jurnal Umum</button>
+        <button class="tab" onclick="showTab(\'buku-besar\', this)">Buku Besar</button>
+        <button class="tab" onclick="showTab(\'neraca-saldo\', this)">Neraca Saldo</button>
+        <button class="tab" onclick="showTab(\'jurnal-penyesuaian\', this)">Jurnal Penyesuaian</button>
+        <button class="tab" onclick="showTab(\'neraca-saldo-setelah\', this)">Neraca Setelah Penyesuaian</button>
+        <button class="tab" onclick="showTab(\'laporan-keuangan\', this)">Laporan Keuangan</button>
+        <button class="tab" onclick="showTab(\'jurnal-penutup\', this)">Jurnal Penutup</button>
+        <button class="tab" onclick="showTab(\'neraca-saldo-penutupan\', this)">Neraca Saldo Setelah Penutupan</button>
     </div>
 
     <div id="chart-of-accounts" class="tab-content active">
@@ -6288,14 +6351,44 @@ def get_simplified_accounting_content():
 
     <div id="saldo-awal" class="tab-content">
         <div class="card">
-            <h3 style="color: var(--primary);"><i class="fas fa-file-invoice-dollar"></i> Saldo Awal</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3 style="color: var(--primary); margin: 0;"><i class="fas fa-file-invoice-dollar"></i> Saldo Awal</h3>
+                <div>
+                    <a href="/seller/edit_initial_balances" class="btn btn-warning">
+                        <i class="fas fa-edit"></i> Edit Saldo Awal
+                    </a>
+                    <button class="btn btn-info" onclick="resetBalances()" style="margin-left: 0.5rem;">
+                        <i class="fas fa-undo"></i> Reset Default
+                    </button>
+                </div>
+            </div>
+        
             <p style="margin-bottom: 1rem; color: #6B7280;">
-                <i class="fas fa-info-circle"></i> Saldo awal diambil secara otomatis dari database.
+                <i class="fas fa-info-circle"></i> Saldo awal diambil secara otomatis dari database. 
+                <strong>Hanya menampilkan akun REAL (Aset, Kewajiban, Ekuitas).</strong>
+                Pendapatan & Beban tidak memiliki saldo awal (selalu 0).
             </p>
+        
+            <div style="background: var(--ocean-light); padding: 1rem; border-radius: var(--border-radius); margin-bottom: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h5 style="color: var(--primary); margin: 0;">Neraca Saldo Awal (Akun REAL saja)</h5>
+                        <p style="margin: 0.25rem 0 0 0; font-size: 0.9rem;">
+                            Aset = Kewajiban + Ekuitas | Pendapatan & Beban = 0
+                        </p>
+                    </div>
+                    <div style="text-align: right;">
+                        <a href="/seller/edit_initial_balances" class="btn btn-sm btn-primary">
+                            <i class="fas fa-calculator"></i> Sesuaikan Saldo REAL
+                        </a>
+                    </div>
+                </div>
+            </div>
+        
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Akun</th>
+                        <th>Akun (REAL saja)</th>
                         <th>Kode</th>
                         <th>Debit</th>
                         <th>Kredit</th>
@@ -6305,29 +6398,63 @@ def get_simplified_accounting_content():
                     {get_saldo_awal_html()}
                 </tbody>
             </table>
+        
+            <!-- Informasi tentang akun nominal -->
+            <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(156, 163, 175, 0.1); border-radius: var(--border-radius);">
+                <h5 style="color: #6B7280; margin-bottom: 0.5rem;">
+                    <i class="fas fa-info-circle"></i> Informasi Akun Nominal
+                </h5>
+                <p style="margin: 0; font-size: 0.9rem;">
+                    <strong>Pendapatan & Beban</strong> adalah akun nominal yang saldo awalnya selalu 0.
+                    Mereka tidak muncul di saldo awal karena akan ditutup di akhir periode akuntansi.
+                    Akun nominal hanya akan memiliki saldo dari transaksi selama periode berjalan.
+                </p>
+            </div>
+        
+            <!-- Reset Warning -->
+            <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(229, 62, 62, 0.1); border-radius: var(--border-radius);">
+                <h5 style="color: var(--error); margin-bottom: 0.5rem;">
+                    <i class="fas fa-exclamation-triangle"></i> Reset ke Default
+                </h5>
+                <p style="margin: 0; font-size: 0.9rem;">
+                    Tombol "Reset Default" akan mengembalikan semua saldo REAL ke nilai default sistem. 
+                    <strong>Akun nominal (Pendapatan & Beban) akan direset ke 0.</strong>
+                </p>
+                <button class="btn btn-danger" onclick="resetBalances()" style="margin-top: 0.5rem;">
+                    <i class="fas fa-bomb"></i> Reset Semua ke Nilai Default
+                </button>
+            </div>
         </div>
     </div>
 
     <div id="jurnal-umum" class="tab-content">
         <div class="card">
-            <h3 style="color: var(--primary);"><i class="fas fa-book"></i> Jurnal Umum</h3>
-
-            <div class="card">
-                <h4 style="color: var(--primary);">Input Jurnal Otomatis</h4>
-
-                <div class="form-group">
-                    <label class="form-label">Jenis Transaksi</label>
-                    <select id="transaction_template" class="form-control" onchange="loadTransactionTemplate()">
-                        <option value="">Pilih Jenis Transaksi</option>
-                        {template_options}
-                    </select>
-                </div>
-
-                <div id="templateFormContainer">
-                    <!-- Form will be loaded here -->
+            <!-- BAGIAN BARU: Form untuk membuat jurnal baru -->
+            <div style="margin-bottom: 2rem;">
+                <h3 style="color: var(--primary); margin-bottom: 1rem;">
+                    <i class="fas fa-plus-circle"></i> Buat Jurnal Umum Baru
+                </h3>
+                
+                <div class="card" style="background: var(--ocean-light); padding: 1.5rem; border-radius: var(--border-radius);">
+                    <h4 style="color: var(--primary); margin-bottom: 1rem;">
+                        <i class="fas fa-calculator"></i> Pilih Template Transaksi
+                    </h4>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Jenis Transaksi</label>
+                        <select id="transaction_template" class="form-control" onchange="loadTransactionTemplate()">
+                            <option value="">-- Pilih Template Transaksi --</option>
+                            {template_options}
+                        </select>
+                    </div>
+                    
+                    <div id="templateFormContainer">
+                        <!-- Form akan dimuat di sini otomatis -->
+                    </div>
                 </div>
             </div>
-
+            
+            <!-- Daftar jurnal yang sudah ada -->
             {get_general_journal_entries()}
         </div>
     </div>
@@ -6731,7 +6858,6 @@ def get_chart_of_accounts_content():
         print(f"Error generating chart of accounts content: {e}")
         return '<div class="card"><p>Error loading Chart of Accounts</p></div>'
 
-# ===== ROUTES UTAMA =====
 # ===== ROUTES UTAMA =====
 @app.route('/')
 def index():
@@ -7825,36 +7951,667 @@ def seller_dashboard():
         flash('Terjadi error saat memuat dashboard.', 'error')
         return redirect('/')
 
+# ===== ROUTE EDIT SALDO AWAL =====
+@app.route('/seller/edit_initial_balances', methods=['GET', 'POST'])
+@login_required
+@seller_required
+def edit_initial_balances():
+    """Edit saldo awal akun-akun HANYA untuk akun REAL (Aset, Kewajiban, Ekuitas)"""
+    try:
+        if request.method == 'POST':
+            print("🔄 Processing edit initial balances...")
+            
+            # Dapatkan semua data dari form
+            data = request.form
+            
+            # RESET: Hapus semua transaksi jurnal sebelum update saldo
+            print("🔄 Resetting all journal entries before updating balances...")
+            
+            # 1. Hapus semua detail jurnal
+            JournalDetail.query.delete()
+            
+            # 2. Hapus semua jurnal
+            JournalEntry.query.delete()
+            
+            # 3. Hapus semua transaksi inventory
+            InventoryTransaction.query.delete()
+            
+            # 4. Hapus semua kartu persediaan
+            InventoryCard.query.delete()
+            
+            # 5. Hapus semua jurnal penutup
+            ClosingEntry.query.delete()
+            ClosingDetail.query.delete()
+            
+            print("✅ All previous transactions cleared!")
+            
+            # PERBAIKAN: Hanya update akun REAL (Aset, Kewajiban, Ekuitas)
+            for key, value in data.items():
+                if key.startswith('balance_'):
+                    account_id = key.replace('balance_', '')
+                    try:
+                        account = Account.query.get(account_id)
+                        
+                        # PERBAIKAN: Hanya update jika akun REAL (bukan nominal)
+                        if account and account.category in ['asset', 'liability', 'equity']:
+                            if value and value.strip():
+                                # Parse nilai, hapus titik pemisah ribuan jika ada
+                                raw_value = str(value).replace('.', '').replace(',', '.').strip()
+                                balance_value = float(raw_value)
+                                
+                                # Set balance langsung ke nilai yang diinput
+                                account.balance = balance_value
+                                
+                                print(f"✅ Updated REAL account {account.code} - {account.name} to Rp {balance_value:,.0f}")
+                        else:
+                            # Untuk akun NOMINAL (Pendapatan & Beban), SET ke 0
+                            if account and account.category in ['revenue', 'expense']:
+                                account.balance = 0
+                                print(f"ℹ️ Reset NOMINAL account {account.code} - {account.name} to 0")
+                                
+                    except ValueError as e:
+                        print(f"❌ Error parsing value for account {account_id}: {e} - Value: '{value}'")
+                        continue
+                    except Exception as e:
+                        print(f"❌ Error updating account {account_id}: {e}")
+                        continue
+            
+            # Reset product stocks sesuai dengan saldo persediaan baru
+            print("🔄 Updating product stocks based on inventory balance...")
+            
+            # Dapatkan account persediaan
+            persediaan_account = Account.query.filter_by(type='persediaan').first()
+            
+            # Hitung distribusi persediaan
+            if persediaan_account and persediaan_account.balance > 0:
+                total_persediaan = persediaan_account.balance
+                
+                # Distribusi: 60% bibit, 40% konsumsi
+                bibit_value = total_persediaan * 0.6  # 60%
+                konsumsi_value = total_persediaan * 0.4  # 40%
+                
+                # Update atau create produk bibit
+                bibit_product = Product.query.filter_by(name='Bibit Ikan Mas').first()
+                if not bibit_product:
+                    seller_id = User.query.filter_by(user_type='seller').first().id
+                    bibit_product = Product(
+                        name='Bibit Ikan Mas',
+                        description='Bibit ikan mas segar ukuran 8cm',
+                        price=2000,
+                        cost_price=1000,
+                        stock=0,
+                        size_cm=8,
+                        seller_id=seller_id,
+                        category='bibit',
+                        image_url='/static/uploads/products/bibit_ikan_mas.jpg'
+                    )
+                    db.session.add(bibit_product)
+                
+                # Hitung stock bibit (harga cost Rp 1,000)
+                bibit_stock = int(bibit_value / 1000)
+                bibit_product.stock = max(bibit_stock, 0)
+                bibit_product.cost_price = 1000
+                print(f"✅ Bibit Ikan Mas: {bibit_product.stock} units (Rp {bibit_value:,.0f})")
+                
+                # Update atau create produk konsumsi
+                konsumsi_product = Product.query.filter_by(name='Ikan Mas Konsumsi').first()
+                if not konsumsi_product:
+                    seller_id = User.query.filter_by(user_type='seller').first().id
+                    konsumsi_product = Product(
+                        name='Ikan Mas Konsumsi',
+                        description='Ikan mas segar siap konsumsi, berat 1kg',
+                        price=20000,
+                        cost_price=13500,
+                        stock=0,
+                        weight_kg=1,
+                        seller_id=seller_id,
+                        category='konsumsi',
+                        image_url='/static/uploads/products/ikan_mas_konsumsi.jpg'
+                    )
+                    db.session.add(konsumsi_product)
+                
+                # Hitung stock konsumsi (harga cost Rp 13,500)
+                konsumsi_stock = int(konsumsi_value / 13500)
+                konsumsi_product.stock = max(konsumsi_stock, 0)
+                konsumsi_product.cost_price = 13500
+                print(f"✅ Ikan Mas Konsumsi: {konsumsi_product.stock} units (Rp {konsumsi_value:,.0f})")
+            
+            # Reset order status untuk memulai dari awal
+            Order.query.update({
+                'payment_status': 'unpaid',
+                'status': 'pending'
+            })
+            
+            # Clear cart items
+            CartItem.query.delete()
+            
+            db.session.commit()
+            print("✅ All balances updated successfully!")
+            
+            flash('✅ Saldo awal berhasil diperbarui! Sistem telah direset dengan saldo baru.', 'success')
+            return redirect('/seller/accounting')
+        
+        # ===== GET METHOD - TAMPILKAN FORM EDIT =====
+        
+        # PERBAIKAN: Hanya ambil akun REAL (Aset, Kewajiban, Ekuitas)
+        # JANGAN ambil akun nominal (Pendapatan, Beban)
+        accounts = Account.query.filter(
+            Account.category.in_(['asset', 'liability', 'equity'])
+        ).order_by(Account.code).all()
+        
+        # Group accounts by category for better organization
+        asset_accounts = [acc for acc in accounts if acc.category == 'asset']
+        liability_accounts = [acc for acc in accounts if acc.category == 'liability']
+        equity_accounts = [acc for acc in accounts if acc.category == 'equity']
+        
+        # PERBAIKAN: Juga get akun nominal untuk info (tapi tidak untuk diedit)
+        nominal_accounts = Account.query.filter(
+            Account.category.in_(['revenue', 'expense'])
+        ).order_by(Account.code).all()
+        
+        # Generate form HTML
+        form_html = '''
+        <div class="card">
+            <h2 style="color: var(--primary); margin-bottom: 1.5rem;">
+                <i class="fas fa-edit"></i> Edit Saldo Awal - HANYA Akun REAL
+            </h2>
+            
+            <div style="background: var(--ocean-light); padding: 1.5rem; border-radius: var(--border-radius); margin-bottom: 2rem;">
+                <h4 style="color: var(--primary); margin-bottom: 0.5rem;">
+                    <i class="fas fa-info-circle"></i> PETUNJUK PENGEDITAN SALDO AWAL
+                </h4>
+                <ul style="margin: 0; padding-left: 1.2rem; font-size: 0.9rem;">
+                    <li><strong>✅ BOLEH Diedit:</strong> Aset, Kewajiban, Ekuitas</li>
+                    <li><strong>❌ TIDAK BOLEH Diedit:</strong> Pendapatan & Beban (saldo awal selalu 0)</li>
+                    <li><strong>Format:</strong> Debit (+) untuk Aset</li>
+                    <li><strong>Format:</strong> Kredit (+) untuk Kewajiban & Ekuitas</li>
+                    <li>Gunakan angka tanpa tanda titik atau koma (contoh: 1000000 untuk 1 juta)</li>
+                    <li><strong style="color: var(--error);">⚠️ PERINGATAN:</strong> Semua transaksi sebelumnya akan dihapus!</li>
+                </ul>
+            </div>
+            
+            <form method="POST" id="editBalancesForm">
+        '''
+        
+        # ASET (Debit Balance)
+        if asset_accounts:
+            form_html += f'''
+            <div style="margin-bottom: 2rem;">
+                <h3 style="color: var(--success); margin-bottom: 1rem; padding: 1rem; background: rgba(56, 161, 105, 0.1); border-radius: var(--border-radius);">
+                    <i class="fas fa-wallet"></i> ASET - Normal Balance: Debit (+)
+                </h3>
+                <div class="grid grid-2">
+            '''
+            
+            for account in asset_accounts:
+                current_balance = int(account.balance) if account.balance else 0
+                form_html += f'''
+                <div class="form-group">
+                    <label class="form-label">
+                        {account.code} - {account.name}
+                        <span style="color: var(--success); font-size: 0.85rem;">(Debit)</span>
+                    </label>
+                    <input type="text" 
+                           name="balance_{account.id}" 
+                           class="form-control balance-input"
+                           value="{current_balance:,}" 
+                           data-account-type="debit"
+                           data-original-value="{current_balance}"
+                           placeholder="Masukkan saldo debit" required>
+                    <small style="color: #6B7280; font-size: 0.8rem;">
+                        Saldo saat ini: <span class="debit">Rp {current_balance:,}</span>
+                    </small>
+                </div>
+                '''
+            
+            form_html += '''
+                </div>
+            </div>
+            '''
+        
+        # KEWAJIBAN (Credit Balance)
+        if liability_accounts:
+            form_html += f'''
+            <div style="margin-bottom: 2rem;">
+                <h3 style="color: var(--error); margin-bottom: 1rem; padding: 1rem; background: rgba(229, 62, 62, 0.1); border-radius: var(--border-radius);">
+                    <i class="fas fa-hand-holding-usd"></i> KEWAJIBAN - Normal Balance: Kredit (+)
+                </h3>
+                <div class="grid grid-2">
+            '''
+            
+            for account in liability_accounts:
+                current_balance = int(account.balance) if account.balance else 0
+                form_html += f'''
+                <div class="form-group">
+                    <label class="form-label">
+                        {account.code} - {account.name}
+                        <span style="color: var(--error); font-size: 0.85rem;">(Kredit)</span>
+                    </label>
+                    <input type="text" 
+                           name="balance_{account.id}" 
+                           class="form-control balance-input"
+                           value="{current_balance:,}" 
+                           data-account-type="credit"
+                           data-original-value="{current_balance}"
+                           placeholder="Masukkan saldo kredit" required>
+                    <small style="color: #6B7280; font-size: 0.8rem;">
+                        Saldo saat ini: <span class="credit">Rp {current_balance:,}</span>
+                    </small>
+                </div>
+                '''
+            
+            form_html += '''
+                </div>
+            </div>
+            '''
+        
+        # EKUITAS (Credit Balance)
+        if equity_accounts:
+            form_html += f'''
+            <div style="margin-bottom: 2rem;">
+                <h3 style="color: var(--primary); margin-bottom: 1rem; padding: 1rem; background: rgba(49, 130, 206, 0.1); border-radius: var(--border-radius);">
+                    <i class="fas fa-user-tie"></i> EKUITAS - Normal Balance: Kredit (+)
+                </h3>
+                <div class="grid grid-2">
+            '''
+            
+            for account in equity_accounts:
+                current_balance = int(account.balance) if account.balance else 0
+                form_html += f'''
+                <div class="form-group">
+                    <label class="form-label">
+                        {account.code} - {account.name}
+                        <span style="color: var(--primary); font-size: 0.85rem;">(Kredit)</span>
+                    </label>
+                    <input type="text" 
+                           name="balance_{account.id}" 
+                           class="form-control balance-input"
+                           value="{current_balance:,}" 
+                           data-account-type="credit"
+                           data-original-value="{current_balance}"
+                           placeholder="Masukkan saldo kredit" required>
+                    <small style="color: #6B7280; font-size: 0.8rem;">
+                        Saldo saat ini: <span class="credit">Rp {current_balance:,}</span>
+                    </small>
+                </div>
+                '''
+            
+            form_html += '''
+                </div>
+            </div>
+            '''
+        
+        # Balance Summary
+        form_html += '''
+            <div style="margin: 2rem 0; padding: 1.5rem; background: var(--ocean-light); border-radius: var(--border-radius);">
+                <h4 style="color: var(--primary); margin-bottom: 1rem;">
+                    <i class="fas fa-calculator"></i> Ringkasan Keseimbangan
+                </h4>
+                
+                <div class="grid grid-2">
+                    <div>
+                        <h5>Total Debit (Aset)</h5>
+                        <div id="total-debit" style="font-size: 1.5rem; font-weight: bold; color: var(--success);">
+                            Rp 0
+                        </div>
+                    </div>
+                    <div>
+                        <h5>Total Kredit (Kewajiban + Ekuitas)</h5>
+                        <div id="total-credit" style="font-size: 1.5rem; font-weight: bold; color: var(--error);">
+                            Rp 0
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="balance-status" style="margin-top: 1rem; padding: 1rem; border-radius: var(--border-radius);">
+                    <!-- Status akan diisi oleh JavaScript -->
+                </div>
+                
+                <div style="margin-top: 1rem; font-size: 0.9rem; color: #6B7280;">
+                    <p><strong>Rumus Keseimbangan:</strong> Aset = Kewajiban + Ekuitas</p>
+                    <p>Pastikan kedua nilai sama sebelum menyimpan!</p>
+                </div>
+            </div>
+            
+            <!-- INFO AKUN NOMINAL (TIDAK BOLEH DEDIT) -->
+            <div style="margin: 2rem 0; padding: 1.5rem; background: rgba(156, 163, 175, 0.1); border-left: 4px solid #9CA3AF; border-radius: var(--border-radius);">
+                <h4 style="color: #6B7280; margin-bottom: 0.5rem;">
+                    <i class="fas fa-info-circle"></i> INFO: Akun Nominal (Tidak Diedit)
+                </h4>
+                <p style="margin: 0.5rem 0; color: #6B7280;">
+                    <strong>Pendapatan & Beban</strong> adalah akun nominal yang saldo awalnya selalu 0.
+                    Mereka akan di-reset otomatis saat Anda menyimpan perubahan ini.
+                </p>
+                <div style="margin-top: 1rem; font-size: 0.9rem;">
+                    <p><strong>Akun Pendapatan & Beban yang akan di-reset ke 0:</strong></p>
+                    <ul style="margin: 0.5rem 0 0 1rem; color: #6B7280;">
+        '''
+        
+        # Tampilkan daftar akun nominal yang akan direset
+        for account in nominal_accounts:
+            form_html += f'''
+                        <li>{account.code} - {account.name} <span style="color: #9CA3AF;">(akan direset ke 0)</span></li>
+            '''
+        
+        form_html += '''
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Warning Card -->
+            <div style="margin: 2rem 0; padding: 1.5rem; background: rgba(229, 62, 62, 0.1); border-left: 4px solid var(--error); border-radius: var(--border-radius);">
+                <h4 style="color: var(--error); margin-bottom: 0.5rem;">
+                    <i class="fas fa-exclamation-triangle"></i> PERINGATAN PENTING
+                </h4>
+                <p style="margin: 0.5rem 0; color: var(--error);">
+                    <strong>Mengedit saldo awal akan:</strong>
+                </p>
+                <ul style="margin: 0.5rem 0 0 0; padding-left: 1.2rem; color: var(--error);">
+                    <li>Menghapus SEMUA transaksi jurnal yang sudah ada</li>
+                    <li>Menghapus SEMUA kartu persediaan</li>
+                    <li>Merestok ulang produk berdasarkan saldo persediaan baru</li>
+                    <li>Reset semua pesanan ke status "pending"</li>
+                    <li>Kosongkan keranjang belanja</li>
+                    <li><strong>Reset semua akun Pendapatan & Beban ke 0</strong></li>
+                </ul>
+                <p style="margin: 1rem 0 0 0; font-size: 0.9rem; color: var(--error);">
+                    <strong>⏰ Waktu terbaik:</strong> Di awal periode akuntansi atau saat setup sistem baru.
+                </p>
+            </div>
+            
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-primary" onclick="calculateBalances()">
+                    <i class="fas fa-calculator"></i> Hitung Ulang Keseimbangan
+                </button>
+                <button type="submit" class="btn btn-success" id="save-button" disabled>
+                    <i class="fas fa-save"></i> Simpan Perubahan Saldo Awal
+                </button>
+                <button type="button" class="btn btn-danger" onclick="resetToOriginal()">
+                    <i class="fas fa-undo"></i> Reset ke Nilai Asli
+                </button>
+                <a href="/seller/accounting" class="btn btn-warning">
+                    <i class="fas fa-times"></i> Batal
+                </a>
+            </div>
+            
+            </form>
+        </div>
+        
+        <!-- JavaScript untuk kalkulasi dan formatting -->
+        <script>
+        // Format number input dengan pemisah ribuan
+        document.querySelectorAll('.balance-input').forEach(input => {
+            // Format saat kehilangan fokus
+            input.addEventListener('blur', function() {
+                formatBalanceInput(this);
+                calculateBalances();
+            });
+            
+            // Hapus formatting saat mendapatkan fokus
+            input.addEventListener('focus', function() {
+                this.value = this.value.replace(/\\./g, '').replace(/,/g, '');
+            });
+            
+            // Real-time validation
+            input.addEventListener('input', function() {
+                // Hanya izinkan angka
+                this.value = this.value.replace(/[^\\d]/g, '');
+                calculateBalances();
+            });
+        });
+        
+        function formatBalanceInput(input) {
+            let value = input.value.replace(/\\./g, '').replace(/,/g, '');
+            if (value) {
+                // Format dengan titik sebagai pemisah ribuan
+                value = parseInt(value).toLocaleString('id-ID');
+                input.value = value;
+            }
+        }
+        
+        function parseBalanceValue(formattedValue) {
+            return parseInt(formattedValue.replace(/\\./g, '').replace(/,/g, '')) || 0;
+        }
+        
+        function calculateBalances() {
+            let totalDebit = 0;
+            let totalCredit = 0;
+            
+            // Hitung total debit dan kredit
+            document.querySelectorAll('.balance-input').forEach(input => {
+                const value = parseBalanceValue(input.value);
+                const accountType = input.getAttribute('data-account-type');
+                
+                if (accountType === 'debit') {
+                    totalDebit += value;
+                } else if (accountType === 'credit') {
+                    totalCredit += value;
+                }
+            });
+            
+            // Update display
+            document.getElementById('total-debit').textContent = 'Rp ' + totalDebit.toLocaleString('id-ID');
+            document.getElementById('total-credit').textContent = 'Rp ' + totalCredit.toLocaleString('id-ID');
+            
+            // Tentukan status keseimbangan
+            const balanceStatus = document.getElementById('balance-status');
+            const saveButton = document.getElementById('save-button');
+            
+            // Toleransi kecil untuk floating point
+            const isBalanced = Math.abs(totalDebit - totalCredit) < 1;
+            
+            if (isBalanced) {
+                balanceStatus.innerHTML = `
+                    <div style="background: rgba(56, 161, 105, 0.1); padding: 1rem; border-radius: var(--border-radius); color: var(--success);">
+                        <i class="fas fa-check-circle"></i>
+                        <strong>NERACA SEIMBANG!</strong>
+                        <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                            Aset (Rp ${totalDebit.toLocaleString('id-ID')}) = Kewajiban + Ekuitas (Rp ${totalCredit.toLocaleString('id-ID')})
+                        </p>
+                    </div>
+                `;
+                saveButton.disabled = false;
+                saveButton.style.opacity = '1';
+                saveButton.innerHTML = '<i class="fas fa-save"></i> Simpan Perubahan Saldo Awal';
+            } else {
+                const difference = Math.abs(totalDebit - totalCredit);
+                balanceStatus.innerHTML = `
+                    <div style="background: rgba(229, 62, 62, 0.1); padding: 1rem; border-radius: var(--border-radius); color: var(--error);">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>NERACA TIDAK SEIMBANG!</strong>
+                        <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                            Selisih: Rp ${difference.toLocaleString('id-ID')}
+                        </p>
+                        <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                            Periksa kembali input Anda!
+                        </p>
+                    </div>
+                `;
+                saveButton.disabled = true;
+                saveButton.style.opacity = '0.5';
+                saveButton.innerHTML = '<i class="fas fa-ban"></i> Neraca Tidak Seimbang';
+            }
+        }
+        
+        function resetToOriginal() {
+            if (confirm('Apakah Anda yakin ingin mengembalikan semua nilai ke saldo awal? Perubahan yang belum disimpan akan hilang.')) {
+                document.querySelectorAll('.balance-input').forEach(input => {
+                    const originalValue = input.getAttribute('data-original-value');
+                    input.value = parseInt(originalValue).toLocaleString('id-ID');
+                });
+                calculateBalances();
+            }
+        }
+        
+        // Hitung saat pertama kali halaman dimuat
+        document.addEventListener('DOMContentLoaded', function() {
+            calculateBalances();
+        });
+        
+        // Tambahkan konfirmasi sebelum submit
+        document.getElementById('editBalancesForm').addEventListener('submit', function(event) {
+            const confirmMessage = '⚠️ KONFIRMASI PERUBAHAN SALDO AWAL ⚠️\\n\\n' +
+                                'Dengan menyimpan perubahan ini, Anda akan:\\n' +
+                                '1. Mengatur ulang saldo awal akun REAL (Aset, Kewajiban, Ekuitas)\\n' +
+                                '2. Reset semua akun NOMINAL (Pendapatan & Beban) ke 0\\n' +
+                                '3. Menghapus SEMUA transaksi jurnal yang ada\\n' +
+                                '4. Menghapus SEMUA kartu persediaan\\n' +
+                                '5. Merestok ulang produk\\n' +
+                                '6. Reset semua pesanan\\n' +
+                                '7. Kosongkan keranjang belanja\\n\\n' +
+                                'Tindakan ini TIDAK DAPAT DIBATALKAN!\\n\\n' +
+                                'Apakah Anda yakin ingin melanjutkan?';
+            
+            if (!confirm(confirmMessage)) {
+                event.preventDefault();
+                return false;
+            }
+            
+            // Tampilkan loading
+            const saveButton = document.getElementById('save-button');
+            saveButton.disabled = true;
+            saveButton.innerHTML = '<div class="loading"></div> Memproses...';
+            
+            return true;
+        });
+        </script>
+        '''
+        
+        content = f'''
+        <div style="max-width: 1200px; margin: 0 auto;">
+            <div class="card" style="margin-bottom: 2rem;">
+                <h1 style="color: var(--primary); margin-bottom: 0.5rem;">
+                    <i class="fas fa-edit"></i> Edit Saldo Awal Akuntansi
+                </h1>
+                <p style="color: #6B7280; margin-bottom: 1.5rem;">
+                    <strong>Hanya edit akun REAL (Aset, Kewajiban, Ekuitas).</strong><br>
+                    Pendapatan & Beban akan otomatis direset ke 0.
+                </p>
+                
+                <!-- Quick Stats -->
+                <div class="stats" style="margin-bottom: 1.5rem;">
+                    <div class="stat-card">
+                        <div class="stat-number">{len(asset_accounts)}</div>
+                        <div class="stat-label">Akun Aset</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">{len(liability_accounts)}</div>
+                        <div class="stat-label">Akun Kewajiban</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">{len(equity_accounts)}</div>
+                        <div class="stat-label">Akun Ekuitas</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">{len(nominal_accounts)}</div>
+                        <div class="stat-label">Akun Nominal (auto reset)</div>
+                    </div>
+                </div>
+            </div>
+            
+            {form_html}
+            
+            <!-- Current System Status -->
+            <div class="card" style="margin-top: 2rem; background: rgba(49, 130, 206, 0.05);">
+                <h4 style="color: var(--primary); margin-bottom: 1rem;">
+                    <i class="fas fa-chart-line"></i> Status Sistem Saat Ini
+                </h4>
+                <div class="grid grid-4">
+                    <div>
+                        <p><strong>Total Transaksi Jurnal:</strong> {JournalEntry.query.count()}</p>
+                    </div>
+                    <div>
+                        <p><strong>Kartu Persediaan:</strong> {InventoryCard.query.count()} entries</p>
+                    </div>
+                    <div>
+                        <p><strong>Pesanan Aktif:</strong> {Order.query.filter(Order.status != 'completed').count()}</p>
+                    </div>
+                    <div>
+                        <p><strong>Item di Keranjang:</strong> {CartItem.query.count()}</p>
+                    </div>
+                </div>
+                <p style="margin-top: 1rem; font-size: 0.9rem; color: #6B7280;">
+                    <i class="fas fa-info-circle"></i> Semua data di atas akan direset ketika Anda menyimpan perubahan saldo awal.
+                </p>
+            </div>
+        </div>
+        '''
+        
+        return base_html('Edit Saldo Awal', content)
+        
+    except Exception as e:
+        print(f"❌ Error in edit_initial_balances: {e}")
+        import traceback
+        traceback.print_exc()
+        flash('Terjadi error saat mengakses halaman edit saldo awal.', 'error')
+        return redirect('/seller/accounting')
+
 @app.route('/seller/reset_balances', methods=['POST'])
 @login_required
 @seller_required
 def reset_balances():
-    """Reset saldo awal ke nilai yang benar"""
+    """Reset saldo awal ke nilai default - HANYA untuk akun REAL"""
     try:
-        # Reset semua saldo account
-        accounts = Account.query.all()
-        for account in accounts:
+        # Konfirmasi reset
+        data = request.get_json() if request.is_json else {}
+        confirm = data.get('confirm', False)
+        
+        if not confirm:
+            return jsonify({
+                'success': False, 
+                'message': 'Konfirmasi reset diperlukan',
+                'requires_confirm': True
+            })
+        
+        # PERBAIKAN: Hanya reset akun REAL
+        real_accounts = Account.query.filter(
+            Account.category.in_(['asset', 'liability', 'equity'])
+        ).all()
+        
+        nominal_accounts = Account.query.filter(
+            Account.category.in_(['revenue', 'expense'])
+        ).all()
+        
+        # Reset akun REAL ke default
+        for account in real_accounts:
+            if account.type == 'kas':
+                account.balance = 10000000
+            elif account.type == 'persediaan':
+                account.balance = 5000000
+            elif account.type == 'perlengkapan':
+                account.balance = 6500000
+            elif account.type == 'peralatan':
+                account.balance = 5000000
+            elif account.type == 'hutang':
+                account.balance = 26500000  # 26.5 juta
+            elif account.type == 'modal':
+                account.balance = -11500000  # -11.5 juta (10+5+6.5+5 - 26.5)
+            else:
+                account.balance = 0
+        
+        # Reset akun NOMINAL ke 0
+        for account in nominal_accounts:
             account.balance = 0
+        
+        print(f"✅ Reset {len(real_accounts)} akun REAL dan {len(nominal_accounts)} akun NOMINAL")
 
-        # Set saldo awal yang benar
-        kas = Account.query.filter_by(type='kas').first()
-        persediaan = Account.query.filter_by(type='persediaan').first()
-        perlengkapan = Account.query.filter_by(type='perlengkapan').first()
-        peralatan = Account.query.filter_by(type='peralatan').first()
-        hutang = Account.query.filter_by(type='hutang').first()
-        pendapatan = Account.query.filter_by(type='pendapatan').first()
-
-        if kas: kas.balance = 10000000
-        if persediaan: persediaan.balance = 5000000
-        if perlengkapan: perlengkapan.balance = 6500000
-        if peralatan: peralatan.balance = 5000000
-        if hutang: hutang.balance = 26500000  # 26.5 juta
-        if pendapatan: pendapatan.balance = 0  # 0
+        # Reset product stocks sesuai saldo awal
+        products = Product.query.all()
+        for product in products:
+            if product.name == 'Bibit Ikan Mas':
+                product.stock = 2975
+                product.cost_price = 1000
+            elif product.name == 'Ikan Mas Konsumsi':
+                product.stock = 150
+                product.cost_price = 13500
 
         db.session.commit()
 
-        flash('✅ Saldo awal berhasil direset! Pendapatan Penjualan = 0, Utang Dagang = Rp 26,500,000', 'success')
-        return jsonify({'success': True, 'message': 'Saldo awal berhasil direset'})
+        flash('✅ Saldo awal berhasil direset ke nilai default!', 'success')
+        return jsonify({
+            'success': True, 
+            'message': 'Saldo awal berhasil direset ke nilai default'
+        })
 
     except Exception as e:
         print(f"Error resetting balances: {e}")
@@ -9719,6 +10476,7 @@ def add_sales_journal():
         db.session.rollback()
         return jsonify({'success': False, 'message': f'Terjadi error: {str(e)}'})
 
+
 @app.route('/seller/add_purchase_journal', methods=['POST'])
 @login_required
 @seller_required
@@ -10166,228 +10924,195 @@ def create_initial_journals():
 
 # ===== FUNGSI CREATE_INITIAL_DATA =====
 def create_initial_data():
-    """Create initial data untuk Supabase"""
-    try:
-        # Create seller account
-        seller = User.query.filter_by(email='kang.mas1817@gmail.com').first()
-        if not seller:
-            seller = User(
-                email='kang.mas1817@gmail.com',
-                full_name='Pemilik Kang-Mas Shop',
-                user_type='seller',
-                phone='+6289654733875',
-                address='Magelang, Jawa Tengah',
-                avatar='👑',
-                email_verified=True
+    # Create seller account
+    seller = User.query.filter_by(email='kang.mas1817@gmail.com').first()
+    if not seller:
+        seller = User(
+            email='kang.mas1817@gmail.com',
+            full_name='Pemilik Kang-Mas Shop',
+            user_type='seller',
+            phone='+6289654733875',
+            address='Magelang, Jawa Tengah',
+            avatar='👑',
+            email_verified=True
+        )
+        seller.set_password('TugasSiaKangMas')
+        db.session.add(seller)
+        print("✅ Seller account created successfully")
+
+    # Create demo customer
+    customer = User.query.filter_by(email='customer@example.com').first()
+    if not customer:
+        customer = User(
+            email='customer@example.com',
+            full_name='Budi Santoso',
+            user_type='customer',
+            phone='087654321098',
+            address='Jl. Contoh No. 123, Jakarta',
+            avatar='👨',
+            email_verified=True
+        )
+        customer.set_password('customer123')
+        db.session.add(customer)
+        print("✅ Customer account created successfully")
+
+    # Create accounts dengan saldo awal YANG DIPERBAIKI
+    if Account.query.count() == 0:
+        accounts = [
+            # Asset Accounts - Debit Balance
+            {'code': '101', 'name': 'Kas', 'type': 'kas', 'category': 'asset', 'balance': 10000000},
+            {'code': '102', 'name': 'Piutang Usaha', 'type': 'piutang', 'category': 'asset', 'balance': 0},
+            {'code': '103', 'name': 'Persediaan Barang Dagang', 'type': 'persediaan', 'category': 'asset', 'balance': 5000000},
+            {'code': '104', 'name': 'Perlengkapan Toko', 'type': 'perlengkapan', 'category': 'asset', 'balance': 6500000},
+            {'code': '105', 'name': 'Peralatan Toko', 'type': 'peralatan', 'category': 'asset', 'balance': 5000000},
+
+            # AKUN BARU UNTUK TEMPLATE
+            {'code': '106', 'name': 'Akumulasi Penyusutan', 'type': 'akumulasi_penyusutan', 'category': 'asset', 'balance': 0},
+            {'code': '107', 'name': 'Penyisihan Piutang', 'type': 'penyisihan_piutang', 'category': 'asset', 'balance': 0},
+            {'code': '108', 'name': 'Pendapatan Diterima Dimuka', 'type': 'pendapatan_diterima_dimuka', 'category': 'liability', 'balance': 0},
+            {'code': '301', 'name': 'Modal Pemilik', 'type': 'modal', 'category': 'equity', 'balance': 0},
+
+            # Liability Accounts - Credit Balance - DIPERBAIKI
+            {'code': '201', 'name': 'Utang Dagang', 'type': 'hutang', 'category': 'liability', 'balance': 26500000},  # DARI 20jt MENJADI 26.5jt
+
+            # Revenue Accounts - Credit Balance - DIPERBAIKI
+            {'code': '401', 'name': 'Pendapatan Penjualan', 'type': 'pendapatan', 'category': 'revenue', 'balance': 0},  # DARI 6.5jt MENJADI 0
+
+            # Expense Accounts - Debit Balance
+            {'code': '501', 'name': 'Harga Pokok Produksi', 'type': 'hpp', 'category': 'expense', 'balance': 0},
+            {'code': '502', 'name': 'Beban Gaji', 'type': 'beban_gaji', 'category': 'expense', 'balance': 0},
+            {'code': '503', 'name': 'Beban Listrik dan Air', 'type': 'beban_listrik', 'category': 'expense', 'balance': 0},
+            {'code': '504', 'name': 'Beban Perlengkapan', 'type': 'beban_perlengkapan', 'category': 'expense', 'balance': 0},
+            {'code': '505', 'name': 'Beban Penyusutan', 'type': 'beban_penyusutan', 'category': 'expense', 'balance': 0},
+            {'code': '506', 'name': 'Beban Transportasi', 'type': 'beban_transport', 'category': 'expense', 'balance': 0},
+            {'code': '507', 'name': 'Beban Operasional', 'type': 'beban_operasional', 'category': 'expense', 'balance': 0},
+            {'code': '520', 'name': 'Beban Kerugian', 'type': 'beban_kerugian', 'category': 'expense', 'balance': 0},
+            {'code': '529', 'name': 'Beban Lain-lain', 'type': 'beban_lain', 'category': 'expense', 'balance': 0},
+        ]
+
+        for acc_data in accounts:
+            account = Account(**acc_data)
+            db.session.add(account)
+        print("✅ Accounts created successfully with corrected balances")
+
+    # Create products
+    # Create products dengan stock sesuai saldo awal
+    if Product.query.count() == 0:
+        seller_id = User.query.filter_by(user_type='seller').first().id
+        products = [
+            {
+                'name': 'Bibit Ikan Mas',
+                'description': 'Bibit ikan mas segar ukuran 8cm, kualitas terbaik untuk pembesaran',
+                'price': 2000,
+                'cost_price': 1000,  # Harga cost untuk HPP
+                'stock': 2975,  # DIPERBAIKI: 2975 ekor sesuai saldo awal
+                'size_cm': 8,
+                'seller_id': seller_id,
+                'category': 'bibit',
+                'image_url': '/static/uploads/products/bibit_ikan_mas.jpg'
+            },
+            {
+                'name': 'Ikan Mas Konsumsi',
+                'description': 'Ikan mas segar siap konsumsi, berat 1kg',
+                'price': 20000,
+                'cost_price': 13500,  # Harga cost untuk HPP
+                'stock': 150,  # DIPERBAIKI: 150 ekor sesuai saldo awal
+                'weight_kg': 1,
+                'seller_id': seller_id,
+                'category': 'konsumsi',
+                'is_featured': True,
+                'image_url': '/static/uploads/products/ikan_mas_konsumsi.jpg'
+            }
+        ]
+
+        for prod_data in products:
+            product = Product(**prod_data)
+            db.session.add(product)
+            db.session.flush()  # Untuk dapat product.id
+
+            # Buat entry awal di kartu persediaan dengan harga cost yang benar
+            if product.name == 'Bibit Ikan Mas':
+                unit_cost = 1000
+                total_value = 2975 * 1000  # 2,975,000
+            else:  # Ikan Mas Konsumsi
+                unit_cost = 13500
+                total_value = 150 * 13500  # 2,025,000
+
+            # Buat transaksi inventory untuk saldo awal
+            inventory_transaction = InventoryTransaction(
+                product_id=product.id,
+                date=datetime.now(),
+                description='SALDO AWAL - Persediaan awal periode',
+                transaction_type='saldo_awal',
+                quantity_in=product.stock,
+                quantity_out=0,
+                unit_price=unit_cost,
+                total_amount=total_value,
+                balance_quantity=product.stock,
+                balance_unit_price=unit_cost,
+                balance_total=total_value
             )
-            seller.set_password('TugasSiaKangMas')
-            db.session.add(seller)
-            print("✅ Seller account created successfully")
+            db.session.add(inventory_transaction)
 
-        # Create demo customer
-        customer = User.query.filter_by(email='customer@example.com').first()
-        if not customer:
-            customer = User(
-                email='customer@example.com',
-                full_name='Budi Santoso',
-                user_type='customer',
-                phone='087654321098',
-                address='Jl. Contoh No. 123, Jakarta',
-                avatar='👨',
-                email_verified=True
+            # Juga buat di InventoryCard untuk kompatibilitas
+            inventory_card = InventoryCard(
+                product_id=product.id,
+                date=datetime.now(),
+                transaction_type='saldo_awal',
+                transaction_number='SALDO_AWAL',
+                quantity_in=product.stock,
+                quantity_out=0,
+                unit_cost=unit_cost,
+                total_cost=total_value,
+                balance_quantity=product.stock,
+                balance_value=total_value
             )
-            customer.set_password('customer123')
-            db.session.add(customer)
-            print("✅ Customer account created successfully")
+            db.session.add(inventory_card)
 
-        # Create accounts
-        if Account.query.count() == 0:
-            accounts = [
-                # Asset Accounts - Debit Balance
-                {'code': '101', 'name': 'Kas', 'type': 'kas', 'category': 'asset', 'balance': 10000000},
-                {'code': '102', 'name': 'Piutang Usaha', 'type': 'piutang', 'category': 'asset', 'balance': 0},
-                {'code': '103', 'name': 'Persediaan Barang Dagang', 'type': 'persediaan', 'category': 'asset', 'balance': 5000000},
-                {'code': '104', 'name': 'Perlengkapan Toko', 'type': 'perlengkapan', 'category': 'asset', 'balance': 6500000},
-                {'code': '105', 'name': 'Peralatan Toko', 'type': 'peralatan', 'category': 'asset', 'balance': 5000000},
-                
-                # AKUN BARU UNTUK TEMPLATE
-                {'code': '106', 'name': 'Akumulasi Penyusutan', 'type': 'akumulasi_penyusutan', 'category': 'asset', 'balance': 0},
-                {'code': '107', 'name': 'Penyisihan Piutang', 'type': 'penyisihan_piutang', 'category': 'asset', 'balance': 0},
-                {'code': '108', 'name': 'Pendapatan Diterima Dimuka', 'type': 'pendapatan_diterima_dimuka', 'category': 'liability', 'balance': 0},
-                {'code': '301', 'name': 'Modal Pemilik', 'type': 'modal', 'category': 'equity', 'balance': 0},
-                
-                # Liability Accounts - Credit Balance
-                {'code': '201', 'name': 'Utang Dagang', 'type': 'hutang', 'category': 'liability', 'balance': 26500000},
-                
-                # Revenue Accounts - Credit Balance
-                {'code': '401', 'name': 'Pendapatan Penjualan', 'type': 'pendapatan', 'category': 'revenue', 'balance': 0},
-                
-                # Expense Accounts - Debit Balance
-                {'code': '501', 'name': 'Harga Pokok Produksi', 'type': 'hpp', 'category': 'expense', 'balance': 0},
-                {'code': '502', 'name': 'Beban Gaji', 'type': 'beban_gaji', 'category': 'expense', 'balance': 0},
-                {'code': '503', 'name': 'Beban Listrik dan Air', 'type': 'beban_listrik', 'category': 'expense', 'balance': 0},
-                {'code': '504', 'name': 'Beban Perlengkapan', 'type': 'beban_perlengkapan', 'category': 'expense', 'balance': 0},
-                {'code': '505', 'name': 'Beban Penyusutan', 'type': 'beban_penyusutan', 'category': 'expense', 'balance': 0},
-                {'code': '506', 'name': 'Beban Transportasi', 'type': 'beban_transport', 'category': 'expense', 'balance': 0},
-                {'code': '507', 'name': 'Beban Operasional', 'type': 'beban_operasional', 'category': 'expense', 'balance': 0},
-                {'code': '520', 'name': 'Beban Kerugian', 'type': 'beban_kerugian', 'category': 'expense', 'balance': 0},
-                {'code': '529', 'name': 'Beban Lain-lain', 'type': 'beban_lain', 'category': 'expense', 'balance': 0},
-            ]
+            print(f"✅ Kartu persediaan saldo awal dibuat untuk {product.name}: {product.stock} unit @ Rp {unit_cost:,} = Rp {total_value:,}")
 
-            for acc_data in accounts:
-                account = Account(**acc_data)
-                db.session.add(account)
-            print("✅ Accounts created successfully")
+        # Hitung total persediaan untuk verifikasi
+        total_persediaan = (2975 * 1000) + (150 * 13500)
+        print(f"📊 Total Saldo Persediaan: Rp {total_persediaan:,} (Bibit: 2,975,000 + Konsumsi: 2,025,000)")
 
-        # Create products
-        if Product.query.count() == 0:
-            seller_id = User.query.filter_by(user_type='seller').first().id
-            products = [
-                {
-                    'name': 'Bibit Ikan Mas',
-                    'description': 'Bibit ikan mas segar ukuran 8cm, kualitas terbaik untuk pembesaran',
-                    'price': 2000,
-                    'cost_price': 1000,
-                    'stock': 2975,
-                    'size_cm': 8,
-                    'seller_id': seller_id,
-                    'category': 'bibit',
-                    'image_url': '/static/uploads/products/bibit_ikan_mas.jpg'
-                },
-                {
-                    'name': 'Ikan Mas Konsumsi',
-                    'description': 'Ikan mas segar siap konsumsi, berat 1kg',
-                    'price': 20000,
-                    'cost_price': 13500,
-                    'stock': 150,
-                    'weight_kg': 1,
-                    'seller_id': seller_id,
-                    'category': 'konsumsi',
-                    'is_featured': True,
-                    'image_url': '/static/uploads/products/ikan_mas_konsumsi.jpg'
-                }
-            ]
+    # Commit semua perubahan
+    db.session.commit()
 
-            for prod_data in products:
-                product = Product(**prod_data)
-                db.session.add(product)
-            print("✅ Products created successfully")
+    # Buat jurnal umum setelah data initial dibuat
+    create_initial_journals()
 
-        # Commit semua perubahan
-        db.session.commit()
-        print("✅ All initial data committed to Supabase!")
-        
-    except Exception as e:
-        print(f"❌ Error creating initial data: {e}")
-        db.session.rollback()
-        raise e
-
-# ===== FUNGSI SETUP SUPABASE SCHEMA =====
-def setup_supabase_schema():
-    """Setup database schema di Supabase"""
+# ===== INISIALISASI DATABASE =====
+def init_database():
+    """Initialize database and create initial data"""
     with app.app_context():
         try:
             # Buat semua tabel
             db.create_all()
-            print("✅ Tables created successfully in Supabase!")
+            print("✅ Database tables created successfully!")
             
             # Cek apakah sudah ada data
             if User.query.count() == 0:
                 create_initial_data()
-                print("✅ Initial data created successfully in Supabase!")
-            else:
-                print("✅ Database already has data")
-                
-        except Exception as e:
-            print(f"❌ Error setting up Supabase schema: {e}")
-            import traceback
-            traceback.print_exc()
-
-# ===== ROUTE SETUP DATABASE (HANYA UNTUK DEVELOPMENT) =====
-@app.route('/admin/setup-database')
-@login_required
-@seller_required
-def setup_database():
-    """Route untuk setup database di Supabase"""
-    try:
-        setup_supabase_schema()
-        return jsonify({'success': True, 'message': 'Database setup completed!'})
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-# ===== INISIALISASI DATABASE =====
-def init_database():
-    """Initialize database and create initial data untuk Supabase"""
-    with app.app_context():
-        try:
-            print("🔧 Initializing database...")
-            
-            # Deteksi tipe database
-            db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
-            
-            if 'supabase' in db_uri or 'postgresql' in db_uri:
-                print("🚀 Detected: Supabase PostgreSQL")
-            elif 'sqlite' in db_uri:
-                print("💻 Detected: SQLite (Local Development)")
-            else:
-                print("❓ Unknown database type")
-            
-            # Buat semua tabel
-            db.create_all()
-            print("✅ Tables created successfully!")
-            
-            # Cek apakah sudah ada data dasar
-            if User.query.count() == 0:
-                print("📦 Creating initial data...")
-                create_initial_data()
                 print("✅ Initial data created successfully!")
             else:
-                # Hitung data yang ada
-                user_count = User.query.count()
-                product_count = Product.query.count()
-                account_count = Account.query.count()
-                print(f"📊 Database stats:")
-                print(f"   👥 Users: {user_count}")
-                print(f"   🐟 Products: {product_count}")
-                print(f"   📈 Accounts: {account_count}")
+                print("✅ Database already has data, skipping initial data creation")
                 
-            print("\n" + "="*50)
-            print("🔐 LOGIN CREDENTIALS:")
-            print("="*50)
-            print("👑 Seller: kang.mas1817@gmail.com / TugasSiaKangMas")
-            print("👤 Customer: customer@example.com / customer123")
-            print("="*50)
+            print("🔐 Seller Login: kang.mas1817@gmail.com / TugasSiaKangMas")
+            print("🔐 Customer Login: customer@example.com / customer123")
             
-            # Tambahkan info Supabase jika terdeteksi
-            if 'supabase' in db_uri:
-                print("\n🌐 Supabase Connection Info:")
-                print(f"   Database: {db_uri.split('@')[1].split('/')[0] if '@' in db_uri else 'N/A'}")
-                print("   Dashboard: https://supabase.com/dashboard")
-                
         except Exception as e:
             print(f"❌ Error initializing database: {e}")
             import traceback
             traceback.print_exc()
-            raise  # Re-raise error agar aplikasi tidak berjalan jika DB error
 
 # ===== JALANKAN APLIKASI =====
 if __name__ == '__main__':
     # Inisialisasi database
-    print("="*60)
-    print("🚀 STARTING KANG-MAS SHOP APPLICATION")
-    print("="*60)
-    
-    success = init_database()
-    
-    if not success:
-        print("❌ Database initialization failed. Exiting...")
-        exit(1)
+    init_database()
     
     # Jalankan app
     port = int(os.environ.get('PORT', 5000))
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     
-    print(f"🌐 Server starting on port {port} (debug: {debug_mode})")
-    print("="*60)
-    
+    print(f"🚀 Server starting on port {port} (debug: {debug_mode})")
     app.run(host='0.0.0.0', port=port, debug=debug_mode)
