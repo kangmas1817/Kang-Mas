@@ -7643,6 +7643,7 @@ def checkout_page():
             if product:
                 total += product.price * item.quantity
 
+        # PERBAIKAN: Tampilkan form checkout dengan shipping dinamis
         content = f'''
         <div style="max-width: 600px; margin: 0 auto;">
             <div class="card">
@@ -7681,17 +7682,162 @@ def checkout_page():
 
                 <div class="card" style="background: var(--ocean-light);">
                     <h4>Ringkasan Pesanan</h4>
-                    <p><strong>Total Belanja:</strong> Rp {total:,.0f}</p>
-                    <p><strong>Ongkos Kirim:</strong> Rp 15,000</p>
-                    <p><strong>Total Pembayaran:</strong> Rp {total + 15000:,.0f}</p>
+                    <div style="margin-bottom: 0.5rem;">
+                        <span><strong>Total Belanja:</strong></span>
+                        <span style="float: right; font-weight: bold;">Rp {total:,.0f}</span>
+                    </div>
+                    <div style="margin-bottom: 0.5rem;">
+                        <span><strong>Ongkos Kirim:</strong></span>
+                        <span id="shipping_cost_display" style="float: right; font-weight: bold;">Rp 0</span>
+                    </div>
+                    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 2px solid var(--primary);">
+                        <span style="font-size: 1.1rem; font-weight: bold;">Total Pembayaran:</span>
+                        <span id="total_payment_display" style="float: right; font-size: 1.2rem; font-weight: bold; color: var(--success);">Rp {total:,.0f}</span>
+                    </div>
                 </div>
 
-                <button class="btn btn-success" style="width: 100%; margin-top: 1rem;" onclick="processCheckout()">
+                <button class="btn btn-success" style="width: 100%; margin-top: 1.5rem; padding: 1rem;" onclick="processCheckout()">
                     <i class="fas fa-credit-card"></i> Proses Pembayaran
                 </button>
             </div>
         </div>
+
+        <script>
+            const CART_TOTAL = {total};
+
+            function formatRupiah(amount) {{
+                return 'Rp ' + amount.toLocaleString('id-ID');
+            }}
+
+            function getShippingCost(method) {{
+                if (method === 'jne') return 15000;
+                if (method === 'jnt') return 12000;
+                if (method === 'pos') return 10000;
+                if (method === 'grab') return 20000;
+                if (method === 'seller') return 0;
+                return 0;
+            }}
+
+            function getShippingMethodText(method) {{
+                if (method === 'jne') return 'JNE Reguler';
+                if (method === 'jnt') return 'JNT Express';
+                if (method === 'pos') return 'POS Indonesia';
+                if (method === 'grab') return 'Grab Express';
+                if (method === 'seller') return 'Pengiriman oleh penjual';
+                return '';
+            }}
+
+            function updateOrderSummary() {{
+                const shippingSelect = document.getElementById('shipping_method');
+                const shippingCostEl = document.getElementById('shipping_cost_display');
+                const totalPaymentEl = document.getElementById('total_payment_display');
+
+                if (!shippingSelect || !shippingCostEl || !totalPaymentEl) return;
+
+                const method = shippingSelect.value;
+                const shippingCost = getShippingCost(method);
+                const totalPayment = CART_TOTAL + shippingCost;
+
+                // Update tampilan
+                if (shippingCost > 0) {{
+                    shippingCostEl.textContent = formatRupiah(shippingCost);
+                    shippingCostEl.style.color = 'var(--dark)';
+                }} else {{
+                    shippingCostEl.textContent = 'GRATIS';
+                    shippingCostEl.style.color = 'var(--success)';
+                }}
+                
+                totalPaymentEl.textContent = formatRupiah(totalPayment);
+            }}
+
+            // Fungsi yang dipanggil saat tombol "Proses Pembayaran" diklik
+            function processCheckout() {{
+                const shippingAddress = document.getElementById('shipping_address').value;
+                const shippingMethod = document.getElementById('shipping_method').value;
+                const paymentMethod = document.getElementById('payment_method').value;
+                const shippingCost = getShippingCost(shippingMethod);
+                const totalPayment = CART_TOTAL + shippingCost;
+
+                if (!shippingAddress) {{
+                    showNotification('Harap isi alamat pengiriman!', 'error');
+                    return;
+                }}
+
+                if (!shippingMethod) {{
+                    showNotification('Harap pilih metode pengiriman!', 'error');
+                    return;
+                }}
+
+                if (!paymentMethod) {{
+                    showNotification('Harap pilih metode pembayaran!', 'error');
+                    return;
+                }}
+
+                // Tampilkan konfirmasi
+                const shippingMethodText = getShippingMethodText(shippingMethod);
+                const confirmMessage = 'KONFIRMASI PEMBAYARAN\\n\\n' +
+                                    'Alamat Pengiriman:\\n' + shippingAddress + '\\n\\n' +
+                                    'Metode Pengiriman:\\n' + shippingMethodText + ' (' + formatRupiah(shippingCost) + ')\\n\\n' +
+                                    'Metode Pembayaran:\\n' + paymentMethod.toUpperCase() + '\\n\\n' +
+                                    'Total Pembayaran:\\n' + formatRupiah(totalPayment) + '\\n\\n' +
+                                    'Lanjutkan pembayaran?';
+
+                if (!confirm(confirmMessage)) {{
+                    return;
+                }}
+
+                const formData = new FormData();
+                formData.append('shipping_address', shippingAddress);
+                formData.append('shipping_method', shippingMethod);
+                formData.append('shipping_cost', shippingCost);
+                formData.append('payment_method', paymentMethod);
+
+                // Tampilkan loading
+                const button = document.querySelector('button[onclick="processCheckout()"]');
+                const originalText = button.innerHTML;
+                button.innerHTML = '<div class="loading"></div> Memproses...';
+                button.disabled = true;
+
+                fetch('/process_checkout', {{
+                    method: 'POST',
+                    body: formData
+                }})
+                .then(response => response.json())
+                .then(data => {{
+                    if (data.success) {{
+                        if (data.is_cod) {{
+                            // Untuk COD, langsung tampilkan sukses
+                            showSuccessModalCOD(data.order_number, data.total_amount);
+                        }} else {{
+                            // Untuk non-COD, tampilkan instruksi pembayaran
+                            showPaymentModal(data.order_number, data.payment_method, data.total_amount);
+                        }}
+                    }} else {{
+                        showNotification('❌ ' + data.message, 'error');
+                        button.innerHTML = originalText;
+                        button.disabled = false;
+                    }}
+                }})
+                .catch(error => {{
+                    console.error('Checkout error:', error);
+                    showNotification('❌ Terjadi kesalahan saat memproses pembayaran', 'error');
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                }});
+            }}
+
+            // Setup event listeners
+            document.addEventListener('DOMContentLoaded', function() {{
+                const shippingSelect = document.getElementById('shipping_method');
+                if (shippingSelect) {{
+                    shippingSelect.addEventListener('change', updateOrderSummary);
+                }}
+                // Set ringkasan awal
+                updateOrderSummary();
+            }});
+        </script>
         '''
+
         return base_html('Checkout', content)
     except Exception as e:
         print(f"Error in checkout route: {e}")
@@ -7772,7 +7918,25 @@ def process_checkout():
         order.total_amount = total_amount
         db.session.commit()
 
-        # ===========================================
+        # ========= 💡 TAMBAHAN UNTUK KARTU PERSEDIAAN =========
+        # Buat transaksi persediaan (penjualan) supaya muncul di Kartu Persediaan
+        from datetime import datetime as dt
+
+        for order_item in order_items:
+            try:
+                desc = f"Penjualan - Order #{order.order_number}"
+                create_inventory_transaction(
+                    product_id=order_item.product_id,
+                    date=dt.now(),
+                    description=desc,
+                    transaction_type='penjualan',
+                    quantity_in=0,
+                    quantity_out=order_item.quantity,
+                    unit_price=order_item.cost_price or 0
+                )
+            except Exception as inv_err:
+                print(f"❌ Error create inventory transaction dari order: {inv_err}")
+        # ======================================================
 
         # Hapus cart items
         CartItem.query.filter_by(user_id=current_user.id).delete()
@@ -7801,6 +7965,7 @@ def process_checkout():
         print(f"Error processing checkout: {e}")
         db.session.rollback()
         return jsonify({'success': False, 'message': 'Terjadi error saat proses checkout'})
+
 
 @app.route('/confirm_payment/<order_number>', methods=['POST'])
 @login_required
