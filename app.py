@@ -5040,6 +5040,15 @@ def base_html(title, content, additional_css="", additional_js=""):
             document.getElementById(modalId).style.display = 'none';
         }}
 
+        function contactSeller() {{
+            // Pilih template chat sesuai metode pembayaran
+            if (window.currentPaymentMethod === 'cod') {{
+                contactSellerCOD();
+            }} else {{
+                contactSellerNonCOD();
+            }}
+        }}
+
         function contactSellerNonCOD() {{
             const orderNumber = window.currentOrderNumber;
             const totalAmount = window.currentTotalAmount;
