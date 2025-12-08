@@ -5816,6 +5816,11 @@ def get_trial_balance_after_adjustment():
             <td class="debit">Rp {total_debit:,.0f}</td>
             <td class="credit">Rp {total_credit:,.0f}</td>
         </tr>
+        <tr style="background: rgba(56, 161, 105, 0.2);">
+            <td colspan="4" style="text-align: center; color: {'var(--success)' if is_balanced else 'var(--error)'}; font-weight: bold;">
+                {'✅ NERACA SALDO SETELAH PENYESUAIAN SEIMBANG' if is_balanced else '❌ NERACA SALDO SETELAH PENYESUAIAN TIDAK SEIMBANG'}
+            </td>
+        </tr>
         '''
 
         return adjusted_trial_balance_html
@@ -5871,11 +5876,6 @@ def get_adjusted_trial_balance():
             <td colspan="2">TOTAL</td>
             <td class="debit">Rp {total_debit:,.0f}</td>
             <td class="credit">Rp {total_credit:,.0f}</td>
-        </tr>
-        <tr style="background: rgba(56, 161, 105, 0.2);">
-            <td colspan="4" style="text-align: center; color: {'var(--success)' if is_balanced else 'var(--error)'}; font-weight: bold;">
-                {'✅ NERACA SALDO SETELAH PENYESUAIAN SEIMBANG' if is_balanced else '❌ NERACA SALDO SETELAH PENYESUAIAN TIDAK SEIMBANG'}
-            </td>
         </tr>
         '''
 
